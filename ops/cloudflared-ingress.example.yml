@@ -1,0 +1,18 @@
+# Optional: send the Rust-backed reads to the Rust service, everything else to Node.
+# Paste these rules into the tunnel's public hostname config (dashboard) or a
+# locally managed cloudflared config. Rules match top to bottom.
+#
+# Remove the first three rules to put all traffic back on Node; nothing else changes.
+ingress:
+  - hostname: rate.example.com
+    path: ^/api/v1/feed$
+    service: http://rust-read:8081
+  - hostname: rate.example.com
+    path: ^/api/v1/items/[0-9A-Z]{26}$
+    service: http://rust-read:8081
+  - hostname: rate.example.com
+    path: ^/api/v1/items/[0-9A-Z]{26}/reviews$
+    service: http://rust-read:8081
+  - hostname: rate.example.com
+    service: http://api:8080
+  - service: http_status:404

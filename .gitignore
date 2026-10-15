@@ -1,0 +1,8 @@
+node_modules/
+api/data/
+*.db
+*.db-shm
+*.db-wal
+.env
+rust/target/
+.DS_Store

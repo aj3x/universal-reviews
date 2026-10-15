@@ -1,0 +1,57 @@
+# Default: just the Node API.            docker compose up -d
+# Add the Rust read service:              docker compose --profile rust up -d
+# Add Litestream backups to R2:           docker compose --profile backup up -d
+# Add the Cloudflare Tunnel:              docker compose --profile tunnel up -d
+# Profiles combine: --profile rust --profile backup --profile tunnel
+
+services:
+  api:
+    build: ./api
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_PATH: /data/rating.db
+    volumes:
+      - db:/data
+    ports:
+      - "127.0.0.1:8080:8080"
+
+  rust-read:
+    profiles: [rust]
+    build: ./rust
+    restart: unless-stopped
+    environment:
+      DATABASE_PATH: /data/rating.db
+    volumes:
+      # Needs write access to the -shm file for WAL reads; the service itself only opens the DB read-only.
+      - db:/data
+    ports:
+      - "127.0.0.1:8081:8081"
+    depends_on: [api]
+
+  litestream:
+    profiles: [backup]
+    image: litestream/litestream:0.3
+    restart: unless-stopped
+    command: replicate
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - db:/data
+      - ./ops/litestream.yml:/etc/litestream.yml:ro
+    depends_on: [api]
+
+  cloudflared:
+    profiles: [tunnel]
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on: [api]
+
+volumes:
+  db:
