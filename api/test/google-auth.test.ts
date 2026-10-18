@@ -4,8 +4,15 @@ import type { GoogleAuth } from "../src/auth/google.js";
 import { openDatabase } from "../src/db/client.js";
 
 const fakeGoogle: GoogleAuth = {
-  start: () => ({ url: new URL("https://accounts.google.com/o/oauth2/v2/auth?x=1"), state: "st", codeVerifier: "cv" }),
-  finish: async (code) => ({ sub: `google-${code}`, email: `${code}@gmail.com`, name: code }),
+  start: async () => ({
+    url: new URL("https://accounts.google.com/o/oauth2/v2/auth?x=1"), state: "st", codeVerifier: "cv", nonce: "n",
+  }),
+  finish: async (search) => {
+    const params = new URLSearchParams(search);
+    if (params.get("error")) throw new Error(params.get("error")!);
+    const code = params.get("code")!;
+    return { sub: `google-${code}`, email: `${code}@gmail.com`, name: code };
+  },
 };
 
 function app(allowed: string[] = []) {
@@ -34,8 +41,25 @@ describe("Google sign-in", () => {
 
   it("rejects a mismatched state", async () => {
     const a = app();
-    const res = await a.request("/api/v1/auth/google/callback?code=x&state=wrong", { headers: { cookie: "oauth=st.cv" } });
+    const start = await a.request("/api/v1/auth/google");
+    const oauth = start.headers.get("set-cookie")!.split(";")[0]!;
+    const res = await a.request("/api/v1/auth/google/callback?code=x&state=wrong", { headers: { cookie: oauth } });
     expect(res.status).toBe(400);
+  });
+
+  it("rejects a missing or malformed login cookie", async () => {
+    const a = app();
+    const res = await a.request("/api/v1/auth/google/callback?code=x&state=st", { headers: { cookie: "oauth=st.cv" } });
+    expect(res.status).toBe(400);
+  });
+
+  it("fails cleanly when Google returns an error", async () => {
+    const a = app();
+    const start = await a.request("/api/v1/auth/google");
+    const oauth = start.headers.get("set-cookie")!.split(";")[0]!;
+    const res = await a.request("/api/v1/auth/google/callback?error=access_denied&state=st", { headers: { cookie: oauth } });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("google_sign_in_failed");
   });
 
   it("turns away emails outside ALLOWED_EMAILS when it is set", async () => {

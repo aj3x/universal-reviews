@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
-import type { GoogleProfile } from "../auth/google.js";
+import type { GoogleProfile, OAuthLogin } from "../auth/google.js";
 import {
   clearSessionCookie,
   createSession,
@@ -14,6 +14,15 @@ import { users } from "../db/schema.js";
 import { newId } from "../lib/ids.js";
 
 const OAUTH_COOKIE = "oauth";
+
+function parseLogin(raw: string | undefined): OAuthLogin | null {
+  try {
+    const v = JSON.parse(raw ?? "");
+    return typeof v?.state === "string" && typeof v.codeVerifier === "string" && typeof v.nonce === "string" ? v : null;
+  } catch {
+    return null;
+  }
+}
 
 /** Find the user by Google's stable id, refresh their profile, or create them. */
 async function upsertGoogleUser(deps: AppDeps, p: GoogleProfile) {
@@ -38,11 +47,17 @@ async function upsertGoogleUser(deps: AppDeps, p: GoogleProfile) {
 }
 
 export const authRoutes = new Hono<AppEnv>()
-  .get("/google", (c) => {
+  .get("/google", async (c) => {
     const { google, secureCookies } = c.var.deps;
     if (!google) return c.json({ error: "google_sign_in_not_configured" }, 503);
-    const { url, state, codeVerifier } = google.start();
-    setCookie(c, OAUTH_COOKIE, `${state}.${codeVerifier}`, {
+    let started;
+    try {
+      started = await google.start();
+    } catch {
+      return c.json({ error: "google_sign_in_unavailable" }, 503);
+    }
+    const { url, ...login } = started;
+    setCookie(c, OAUTH_COOKIE, JSON.stringify(login), {
       httpOnly: true, secure: secureCookies, sameSite: "Lax", path: "/", maxAge: 600,
     });
     return c.redirect(url.toString());
@@ -51,15 +66,14 @@ export const authRoutes = new Hono<AppEnv>()
   .get("/google/callback", async (c) => {
     const deps = c.var.deps;
     if (!deps.google) return c.json({ error: "google_sign_in_not_configured" }, 503);
-    const [state, codeVerifier] = (getCookie(c, OAUTH_COOKIE) ?? "").split(".");
+    const login = parseLogin(getCookie(c, OAUTH_COOKIE));
     deleteCookie(c, OAUTH_COOKIE, { path: "/" });
-    const code = c.req.query("code");
-    if (!code || !state || !codeVerifier || c.req.query("state") !== state) {
+    if (!login || c.req.query("state") !== login.state) {
       return c.json({ error: "invalid_oauth_state" }, 400);
     }
     let profile: GoogleProfile;
     try {
-      profile = await deps.google.finish(code, codeVerifier);
+      profile = await deps.google.finish(new URL(c.req.url).search, login);
     } catch {
       return c.json({ error: "google_sign_in_failed" }, 400);
     }
