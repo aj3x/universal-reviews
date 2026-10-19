@@ -29,15 +29,17 @@ cookie (or `Authorization: Bearer <token>` for scripts). Lists are paginated wit
 | GET | `/users/:id/reviews` | Only what you're allowed to see |
 | POST · DELETE | `/users/:id/follow` | Public account: accepted at once. Private: pending |
 
-## Items (restaurants now; movies and books later)
+## Items (restaurants and movies; books later)
 
 | Method | Path | Notes |
 | --- | --- | --- |
 | GET | `/places/autocomplete?q=&session=&lat=&lng=` | Google Places through the server |
+| GET | `/movies/search?q=` | TMDB through the server: `{ data: [{ tmdbId, title, year }] }`. `503 tmdb_not_configured` without `TMDB_API_KEY` |
+| POST | `/items/from-movie` | `{ tmdbId, title }`; reuses the existing item for that TMDB id (200), else fetches year, runtime and director and creates it (201). `503 tmdb_not_configured` if it must fetch and no key is set |
 | POST | `/items/from-place` | `{ placeId, name, sessionToken? }`; reuses an existing item for that place |
-| POST | `/items` | Manual entry: `{ kind, title, details? }` |
-| GET | `/items?q=&kind=` | Title search |
-| GET | `/items/:id` **R** | Details + stats: averages per score, revisit and recommend counts |
+| POST | `/items` | Manual entry: `{ kind, title, details? }`. Restaurant details: `address, lat, lng, cuisine, priceLevel`. Movie details: `{ year?, runtime? (minutes), director? }` |
+| GET | `/items?q=&kind=` | Title search; rows carry `address` (restaurants) or `year` (movies) |
+| GET | `/items/:id` **R** | `details` is restaurant `{ address, lat, lng, cuisine, priceLevel }`, movie `{ year, runtime, director }`, or null. Plus stats: averages per score, revisit and recommend counts |
 | GET | `/items/:id/reviews` **R** | |
 | PATCH | `/items/:id/details` | `{ cuisine?, priceLevel? }` (your data, not Google's) |
 

@@ -10,8 +10,8 @@
 export const ITEM_KINDS = ["restaurant", "movie", "book"] as const;
 export type ItemKind = (typeof ITEM_KINDS)[number];
 
-/** Kinds the app accepts reviews for today. Movies and books are modelled but not switched on. */
-export const ENABLED_KINDS: readonly ItemKind[] = ["restaurant"];
+/** Kinds the app accepts reviews for today. Books are modelled but not switched on. */
+export const ENABLED_KINDS: readonly ItemKind[] = ["restaurant", "movie"];
 
 export const SCORE_FIELDS = ["enjoyment", "impact", "value", "aesthetic"] as const;
 export type ScoreField = (typeof SCORE_FIELDS)[number];

@@ -97,14 +97,17 @@ export async function feed(db: DB, viewerId: string, cursor?: string, limit = PA
 type ItemRow = {
   id: string; kind: string; title: string; external_source: string | null; external_id: string | null;
   address: string | null; lat: number | null; lng: number | null; cuisine: string | null; price_level: number | null;
+  year: number | null; runtime: number | null; director: string | null;
 };
 
 /** One item with its details and aggregate stats over the reviews the viewer can see. */
 export async function getItem(db: DB, viewerId: string, itemId: string) {
   const item = await db.get<ItemRow>(sql`
     SELECT i.id, i.kind, i.title, i.external_source, i.external_id,
-           d.address, d.lat, d.lng, d.cuisine, d.price_level
+           d.address, d.lat, d.lng, d.cuisine, d.price_level,
+           m.year, m.runtime, m.director
     FROM items i LEFT JOIN restaurant_details d ON d.item_id = i.id
+                 LEFT JOIN movie_details m ON m.item_id = i.id
     WHERE i.id = ${itemId}`);
   if (!item) return null;
 
@@ -138,7 +141,9 @@ export async function getItem(db: DB, viewerId: string, itemId: string) {
     details:
       item.kind === "restaurant"
         ? { address: item.address, lat: item.lat, lng: item.lng, cuisine: item.cuisine, priceLevel: item.price_level }
-        : null,
+        : item.kind === "movie"
+          ? { year: item.year, runtime: item.runtime, director: item.director }
+          : null,
     stats: {
       reviewCount: agg?.n ?? 0,
       averages: {

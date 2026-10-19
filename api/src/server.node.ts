@@ -3,7 +3,8 @@ import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
 import { createGoogleAuth } from "./auth/google.js";
 import { openDatabase } from "./db/client.js";
-import { createPlacesClient } from "./lib/places.js";
+import { createPlacesClient } from "./sources/places.js";
+import { createTmdbClient } from "./sources/tmdb.js";
 
 const env = process.env;
 const production = env.NODE_ENV === "production";
@@ -22,6 +23,7 @@ const app = createApp(
     db,
     google,
     places: env.GOOGLE_PLACES_API_KEY ? createPlacesClient(env.GOOGLE_PLACES_API_KEY) : undefined,
+    tmdb: env.TMDB_API_KEY ? createTmdbClient(env.TMDB_API_KEY) : undefined,
     allowedEmails: new Set(
       (env.ALLOWED_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean),
     ),

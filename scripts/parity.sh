@@ -21,6 +21,7 @@ cd "$root/api"
 seed="$(DATABASE_PATH="$db" npx tsx scripts/seed.ts)"
 token="$(node -pe 'JSON.parse(process.argv[1]).token' "$seed")"
 item="$(node -pe 'JSON.parse(process.argv[1]).sampleItemId' "$seed")"
+movie="$(node -pe 'JSON.parse(process.argv[1]).sampleMovieId' "$seed")"
 
 DATABASE_PATH="$db" PORT=18080 node --import tsx src/server.node.ts >"$work/node.log" 2>&1 & node_pid=$!
 DATABASE_PATH="$db" PORT=18081 "$rust_bin" >"$work/rust.log" 2>&1 & rust_pid=$!
@@ -40,5 +41,5 @@ wait_for() {
 wait_for node 18080
 wait_for rust 18081
 
-NODE_URL=http://localhost:18080 RUST_URL=http://localhost:18081 TOKEN="$token" ITEM_ID="$item" \
+NODE_URL=http://localhost:18080 RUST_URL=http://localhost:18081 TOKEN="$token" ITEM_ID="$item" MOVIE_ID="$movie" \
   npx tsx scripts/parity.ts

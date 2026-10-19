@@ -3,7 +3,7 @@ import { and, desc, eq, like } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "../context.js";
-import { items, restaurantDetails } from "../db/schema.js";
+import { items, movieDetails, restaurantDetails } from "../db/schema.js";
 import { newId } from "../lib/ids.js";
 import { getItem, listItemReviews, pageLimit } from "../lib/queries.js";
 import { ENABLED_KINDS, ITEM_KINDS } from "../review-model.js";
@@ -16,10 +16,17 @@ const restaurantDetailsInput = z.object({
   priceLevel: z.number().int().min(1).max(4).nullish(),
 });
 
+const movieDetailsInput = z.object({
+  year: z.number().int().min(1870).max(2200).nullish(),
+  runtime: z.number().int().min(1).max(1000).nullish(),
+  director: z.string().trim().max(200).nullish(),
+});
+
 const createItemInput = z.object({
   kind: z.enum(ITEM_KINDS),
   title: z.string().trim().min(1).max(200),
-  details: restaurantDetailsInput.optional(),
+  /** Shape depends on kind; validated below. */
+  details: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const itemRoutes = new Hono<AppEnv>()
@@ -30,8 +37,9 @@ export const itemRoutes = new Hono<AppEnv>()
     if (q) filters.push(like(items.title, `%${q}%`));
     if (kind && (ITEM_KINDS as readonly string[]).includes(kind)) filters.push(eq(items.kind, kind as (typeof ITEM_KINDS)[number]));
     const rows = await c.var.deps.db
-      .select({ id: items.id, kind: items.kind, title: items.title, address: restaurantDetails.address })
+      .select({ id: items.id, kind: items.kind, title: items.title, address: restaurantDetails.address, year: movieDetails.year })
       .from(items).leftJoin(restaurantDetails, eq(restaurantDetails.itemId, items.id))
+      .leftJoin(movieDetails, eq(movieDetails.itemId, items.id))
       .where(filters.length ? and(...filters) : undefined)
       .orderBy(desc(items.id)).limit(pageLimit(c.req.query("limit")));
     return c.json({ data: rows });
@@ -42,9 +50,13 @@ export const itemRoutes = new Hono<AppEnv>()
     const input = c.req.valid("json");
     if (!ENABLED_KINDS.includes(input.kind)) return c.json({ error: "kind_not_enabled", kind: input.kind }, 400);
     const { db } = c.var.deps;
+    const schema = input.kind === "movie" ? movieDetailsInput : restaurantDetailsInput;
+    const details = schema.safeParse(input.details ?? {});
+    if (!details.success) return c.json({ error: "invalid_details" }, 400);
     const id = newId();
     await db.insert(items).values({ id, kind: input.kind, title: input.title, createdBy: c.var.user.id });
-    if (input.kind === "restaurant") await db.insert(restaurantDetails).values({ itemId: id, ...input.details });
+    if (input.kind === "restaurant") await db.insert(restaurantDetails).values({ itemId: id, ...details.data });
+    if (input.kind === "movie") await db.insert(movieDetails).values({ itemId: id, ...details.data });
     return c.json(await getItem(db, c.var.user.id, id), 201);
   })
 
@@ -76,6 +88,30 @@ export const itemRoutes = new Hono<AppEnv>()
     },
   )
 
+  /** Add (or find) a movie from a TMDB search result. */
+  .post(
+    "/from-movie",
+    zValidator("json", z.object({ tmdbId: z.number().int().positive(), title: z.string().trim().min(1).max(200) })),
+    async (c) => {
+      const { db, tmdb } = c.var.deps;
+      const { tmdbId, title } = c.req.valid("json");
+      const existing = await db.select({ id: items.id }).from(items)
+        .where(and(eq(items.externalSource, "tmdb"), eq(items.externalId, String(tmdbId)))).get();
+      if (existing) return c.json(await getItem(db, c.var.user.id, existing.id));
+      if (!tmdb) return c.json({ error: "tmdb_not_configured" }, 503);
+
+      const movie = await tmdb.details(tmdbId);
+      const id = newId();
+      await db.insert(items).values({
+        id, kind: "movie", title: movie.title || title, externalSource: "tmdb", externalId: String(movie.tmdbId), createdBy: c.var.user.id,
+      });
+      await db.insert(movieDetails).values({
+        itemId: id, year: movie.year, runtime: movie.runtime, director: movie.director, cachedAt: new Date().toISOString(),
+      });
+      return c.json(await getItem(db, c.var.user.id, id), 201);
+    },
+  )
+
   .get("/:id", async (c) => {
     const item = await getItem(c.var.deps.db, c.var.user.id, c.req.param("id"));
     return item ? c.json(item) : c.json({ error: "not_found" }, 404);
@@ -101,15 +137,3 @@ export const itemRoutes = new Hono<AppEnv>()
       return c.json(await getItem(db, c.var.user.id, id));
     },
   );
-
-export const placesRoutes = new Hono<AppEnv>().get("/autocomplete", async (c) => {
-  const { places } = c.var.deps;
-  if (!places) return c.json({ error: "places_not_configured" }, 503);
-  const q = (c.req.query("q") ?? "").trim();
-  const session = c.req.query("session") ?? "";
-  if (q.length < 2 || !session) return c.json({ data: [] });
-  const lat = Number(c.req.query("lat"));
-  const lng = Number(c.req.query("lng"));
-  const near = Number.isFinite(lat) && Number.isFinite(lng) && c.req.query("lat") ? { lat, lng } : undefined;
-  return c.json({ data: await places.autocomplete(q, session, near) });
-});

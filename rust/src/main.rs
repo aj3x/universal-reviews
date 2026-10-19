@@ -226,8 +226,11 @@ async fn item(State(s): State<Arc<AppState>>, Path(id): Path<String>, h: HeaderM
         let item = c
             .query_row(
                 "SELECT i.id, i.kind, i.title, i.external_source, i.external_id,
-                        d.address, d.lat, d.lng, d.cuisine, d.price_level
-                 FROM items i LEFT JOIN restaurant_details d ON d.item_id = i.id WHERE i.id = ?1",
+                        d.address, d.lat, d.lng, d.cuisine, d.price_level,
+                        m.year, m.runtime, m.director
+                 FROM items i LEFT JOIN restaurant_details d ON d.item_id = i.id
+                              LEFT JOIN movie_details m ON m.item_id = i.id
+                 WHERE i.id = ?1",
                 params![id],
                 |r| {
                     let kind: String = r.get("kind")?;
@@ -238,6 +241,12 @@ async fn item(State(s): State<Arc<AppState>>, Path(id): Path<String>, h: HeaderM
                             "lng": r.get::<_, Option<f64>>("lng")?,
                             "cuisine": r.get::<_, Option<String>>("cuisine")?,
                             "priceLevel": r.get::<_, Option<i64>>("price_level")?,
+                        })
+                    } else if kind == "movie" {
+                        json!({
+                            "year": r.get::<_, Option<i64>>("year")?,
+                            "runtime": r.get::<_, Option<i64>>("runtime")?,
+                            "director": r.get::<_, Option<String>>("director")?,
                         })
                     } else {
                         Value::Null

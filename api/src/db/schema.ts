@@ -55,8 +55,8 @@ export const follows = sqliteTable(
 
 // ── Things you review ─────────────────────────────────────────────────────
 // One `items` row per reviewable thing, whatever its kind. Kind-specific
-// fields live in a 1:1 details table (restaurant_details now; movie_details
-// and book_details when those kinds are switched on).
+// fields live in a 1:1 details table (restaurant_details, movie_details;
+// book_details when that kind is switched on).
 
 export const items = sqliteTable(
   "items",
@@ -64,7 +64,7 @@ export const items = sqliteTable(
     id: text("id").primaryKey(),
     kind: text("kind", { enum: ITEM_KINDS }).notNull(),
     title: text("title").notNull(),
-    /** Where the record came from: google_places now; tmdb / openlibrary later. */
+    /** Where the record came from: google_places, tmdb; openlibrary later. */
     externalSource: text("external_source"),
     externalId: text("external_id"),
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
@@ -89,6 +89,18 @@ export const restaurantDetails = sqliteTable("restaurant_details", {
   lng: real("lng"),
   cuisine: text("cuisine"),
   priceLevel: integer("price_level"),
+  cachedAt: text("cached_at"),
+});
+
+/**
+ * TMDB terms: the tmdb id (items.external_id) is kept indefinitely; year, runtime
+ * and director are filled from TMDB (or by hand for manual entries), cached_at marks the fetch.
+ */
+export const movieDetails = sqliteTable("movie_details", {
+  itemId: text("item_id").primaryKey().references(() => items.id, { onDelete: "cascade" }),
+  year: integer("year"),
+  runtime: integer("runtime"), // minutes
+  director: text("director"),
   cachedAt: text("cached_at"),
 });
 

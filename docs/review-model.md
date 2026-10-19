@@ -44,7 +44,7 @@ rather than on `reviews`.
 ```
 items (id, kind, title, external_source, external_id)       ← every reviewable thing
   ├─ restaurant_details (item_id, address, lat, lng, cuisine, price_level, cached_at)
-  ├─ movie_details      (item_id, year, runtime, director, tmdb fields…)    later
+  ├─ movie_details      (item_id, year, runtime, director, cached_at)        on; tmdb id is items.external_id
   └─ book_details       (item_id, author, year, pages, isbn…)                later
 reviews (item_id → items, six answers, notes)                ← identical for every kind
 ```
@@ -65,17 +65,18 @@ Why this over a document model:
   changes almost nothing in that SQL. If a document store ever made sense, each review
   plus its item maps cleanly to one document, so an export is a single query.
 
-## What happens if you add movies and books today
+## Adding movies and books
 
-Nothing breaks, and no review data moves.
+**Movies are switched on** (`ENABLED_KINDS`, `movie_details`, TMDB source: see steps 2 and below). Books are still modelled but off. Adding a kind never moves review data.
 
 1. `items.kind` already allows `movie` and `book` (`CHECK` constraint), and the prompts
    for both already exist.
-2. To switch a kind on: add it to `ENABLED_KINDS` in `src/review-model.ts`, add a
+2. To switch a kind on (done for movies; `src/sources/tmdb.ts` and `/movies/search` + `/items/from-movie` are the template for books): add it to `ENABLED_KINDS` in `src/review-model.ts`, add a
    `movie_details` table in a migration, and add a source (TMDB for movies, Open Library
    for books, both free) the same way Google Places feeds restaurants. Until then the API
    refuses reviews of disabled kinds (`kind_not_enabled`).
-3. Reviews of movies go in the same `reviews` table with the same six answers. Feeds,
+3. Movie details come from TMDB's `movie/{id}?append_to_response=credits` once, when the movie is first added (`cached_at` records it); only the tmdb id must be kept long term. Manual movies can supply year, runtime and director themselves. TMDB requires attribution ("This product uses the TMDB API but is not endorsed or certified by TMDB"), which the app does not yet show.
+4. Reviews of movies go in the same `reviews` table with the same six answers. Feeds,
    lists, follows, item stats and the Rust read endpoints work unchanged.
 
 Two things to decide when you do it:

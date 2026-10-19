@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { items } from "../src/db/schema.js";
+import { createApp } from "../src/app.js";
 import { sampleReview, setup } from "./helpers.js";
 
 describe("auth", () => {
@@ -44,6 +45,81 @@ describe("restaurants from Google Places", () => {
   });
 });
 
+describe("movies", () => {
+  it("lists movie in the review model with its prompts", async () => {
+    const { app } = setup();
+    const body = await (await app.request("/api/v1/review-model?kind=movie")).json();
+    expect(body.enabledKinds).toEqual(["restaurant", "movie"]);
+    expect(body.prompts.movie.enjoyment).toBe("Did you like watching it?");
+  });
+
+  it("proxies TMDB search", async () => {
+    const { user } = setup();
+    const me = await user("alex");
+    const res = await me.json("GET", "/movies/search?q=barbie");
+    expect(res.body.data[0]).toEqual({ tmdbId: 346698, title: "barbie (Movie)", year: 2023 });
+    expect((await me.json("GET", "/movies/search?q=b")).body.data).toEqual([]);
+  });
+
+  it("creates once per tmdb id, with details, and reuses it after", async () => {
+    const { user } = setup();
+    const me = await user("alex");
+    const first = await me.json("POST", "/items/from-movie", { tmdbId: 346698, title: "Barbie" });
+    expect(first.status).toBe(201);
+    expect(first.body).toMatchObject({
+      kind: "movie", externalSource: "tmdb", externalId: "346698",
+      details: { year: 2023, runtime: 114, director: "Greta Gerwig" },
+    });
+    const again = await me.json("POST", "/items/from-movie", { tmdbId: 346698, title: "Barbie" });
+    expect(again.status).toBe(200);
+    expect(again.body.id).toBe(first.body.id);
+    expect((await me.json("GET", `/items/${first.body.id}`)).body.details.year).toBe(2023);
+  });
+
+  it("returns 503 tmdb_not_configured without a key, but still reuses known movies", async () => {
+    const { db, user } = setup();
+    const me = await user("alex");
+    const known = await me.json("POST", "/items/from-movie", { tmdbId: 1, title: "A" });
+    const bare = createApp({ db, allowedEmails: new Set(), devLogin: false, secureCookies: false, appUrl: "http://localhost" });
+    const call = (path: string, body?: unknown) => bare.request(`/api/v1${path}`, {
+      method: body ? "POST" : "GET",
+      headers: { cookie: `sid=${me.token}`, "content-type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const search = await call("/movies/search?q=barbie");
+    expect(search.status).toBe(503);
+    expect((await search.json()).error).toBe("tmdb_not_configured");
+    const add = await call("/items/from-movie", { tmdbId: 2, title: "B" });
+    expect(add.status).toBe(503);
+    expect((await call("/items/from-movie", { tmdbId: 1, title: "A" })).status).toBe(200);
+    expect(known.status).toBe(201);
+  });
+
+  it("accepts manual movies with optional details", async () => {
+    const { user } = setup();
+    const me = await user("alex");
+    const plain = await me.json("POST", "/items", { kind: "movie", title: "Home video" });
+    expect(plain.status).toBe(201);
+    expect(plain.body.details).toEqual({ year: null, runtime: null, director: null });
+    const full = await me.json("POST", "/items", {
+      kind: "movie", title: "Paddington 2", details: { year: 2017, runtime: 103, director: "Paul King" },
+    });
+    expect(full.body.details).toEqual({ year: 2017, runtime: 103, director: "Paul King" });
+    expect((await me.json("POST", "/items", { kind: "movie", title: "X", details: { year: "soon" } })).status).toBe(400);
+  });
+
+  it("reviews a movie", async () => {
+    const { user } = setup();
+    const me = await user("alex");
+    const movie = await me.json("POST", "/items/from-movie", { tmdbId: 346698, title: "Barbie" });
+    const res = await me.json("POST", "/reviews", sampleReview(movie.body.id));
+    expect(res.status).toBe(201);
+    const item = await me.json("GET", `/items/${movie.body.id}`);
+    expect(item.body.stats.reviewCount).toBe(1);
+    expect(item.body.stats.averages.enjoyment).toBe(8);
+  });
+});
+
 describe("reviews", () => {
   it("creates a review with the six primary answers and optional notes", async () => {
     const { user } = setup();
@@ -70,9 +146,9 @@ describe("reviews", () => {
   it("refuses reviews of kinds that are modelled but not enabled", async () => {
     const { user, db } = setup();
     const me = await user("alex");
-    expect((await me.json("POST", "/items", { kind: "movie", title: "Paddington 2" })).status).toBe(400);
-    await db.insert(items).values({ id: "movie1", kind: "movie", title: "Paddington 2" });
-    const res = await me.json("POST", "/reviews", sampleReview("movie1"));
+    expect((await me.json("POST", "/items", { kind: "book", title: "Piranesi" })).status).toBe(400);
+    await db.insert(items).values({ id: "book1", kind: "book", title: "Piranesi" });
+    const res = await me.json("POST", "/reviews", sampleReview("book1"));
     expect(res.body.error).toBe("kind_not_enabled");
   });
 

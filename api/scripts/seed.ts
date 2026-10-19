@@ -5,7 +5,7 @@
  */
 import { createSession } from "../src/auth/session.js";
 import { openDatabase } from "../src/db/client.js";
-import { follows, items, restaurantDetails, reviews, users } from "../src/db/schema.js";
+import { follows, items, movieDetails, restaurantDetails, reviews, users } from "../src/db/schema.js";
 import { newId } from "../src/lib/ids.js";
 import { RECOMMEND_TO, REVISIT } from "../src/review-model.js";
 
@@ -42,6 +42,10 @@ for (const [i, title] of places.entries()) {
   });
 }
 
+const movieId = newId();
+await db.insert(items).values({ id: movieId, kind: "movie", title: "Paddington 2", externalSource: "tmdb", externalId: "346648", createdBy: people[0]!.id });
+await db.insert(movieDetails).values({ itemId: movieId, year: 2017, runtime: 103, director: "Paul King", cachedAt: new Date().toISOString() });
+
 const [alex, jordan, sam, riley] = people as [typeof people[0], typeof people[0], typeof people[0], typeof people[0]];
 await db.insert(follows).values([
   { followerId: alex.id, followeeId: jordan.id, status: "accepted" },
@@ -66,6 +70,12 @@ for (const p of people) {
   }
 }
 
+await db.insert(reviews).values({
+  id: newId(), userId: people[0]!.id, itemId: movieId, experiencedOn: "2026-09-01",
+  enjoyment: 9, impact: 7, value: 8, aesthetic: 7, revisit: "regularly", recommendTo: "everyone", notes: null,
+});
+count++;
+
 const { token } = await createSession(db, alex.id);
-console.log(JSON.stringify({ users: people.length, items: itemIds.length, reviews: count, viewer: "Alex", token, sampleItemId: itemIds[0] }, null, 2));
+console.log(JSON.stringify({ users: people.length, items: itemIds.length, reviews: count, viewer: "Alex", token, sampleItemId: itemIds[0], sampleMovieId: movieId }, null, 2));
 sqlite.close();

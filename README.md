@@ -1,6 +1,6 @@
 # Custom Rating
 
-A universal personal rating system: restaurants first, built so movies and books can join
+A universal personal rating system: restaurants and movies today, built so books can join
 later on the same six questions. Small, cheap, self-hosted; portable to Cloudflare Workers.
 
 ```
@@ -34,7 +34,7 @@ Needs Node 22+.
 ```bash
 cd api
 npm install
-npm test                         # 17 tests, in-memory SQLite
+npm test                         # in-memory SQLite, fake Places and TMDB
 npm run seed                     # sample data in ./data/rating.db; prints a session token
 DEV_LOGIN=1 npm run dev          # http://localhost:8080
 ```
@@ -59,7 +59,8 @@ curl -b jar localhost:8080/api/v1/me
 2. **Credentials → OAuth client ID (Web)**, redirect URI `$PUBLIC_URL/api/v1/auth/google/callback`.
 3. Enable **Places API (New)**, create an API key restricted to it, then in **Quotas** cap
    Autocomplete and Place Details at the free monthly amounts and add a $1 budget alert.
-4. Copy `.env.example` to `.env` and fill in the IDs and key.
+4. Movies: create a free TMDB account, copy the v3 API key into `TMDB_API_KEY`. Without it, movie search returns `tmdb_not_configured` and movies can still be added by hand.
+5. Copy `.env.example` to `.env` and fill in the IDs and key.
 
 Anyone with a Google account can sign up. To make it invite-only, list emails in
 `ALLOWED_EMAILS`. Accounts are public by default; users can go private in `PATCH /me`.
@@ -74,7 +75,7 @@ docker compose --profile backup --profile tunnel up -d   # + Litestream to R2 + 
 
 ## The Rust experiment
 
-`rust/` serves three read endpoints — `GET /items/:id`, `GET /items/:id/reviews`,
+`rust/` serves three read endpoints — `GET /items/:id` (restaurant and movie details), `GET /items/:id/reviews`,
 `GET /feed` — from the same SQLite file, read-only, with the same SQL as
 `api/src/lib/queries.ts`. Node still does everything else, including all writes.
 

@@ -5,7 +5,8 @@ import { secureHeaders } from "hono/secure-headers";
 import { readSessionCookie, validateSession } from "./auth/session.js";
 import type { AppDeps, AppEnv } from "./context.js";
 import { authRoutes } from "./routes/auth.js";
-import { itemRoutes, placesRoutes } from "./routes/items.js";
+import { itemRoutes } from "./routes/items.js";
+import { moviesRoutes, placesRoutes } from "./routes/search.js";
 import { listRoutes } from "./routes/lists.js";
 import { feedRoutes, reviewModelRoutes, reviewRoutes } from "./routes/reviews.js";
 import { meRoutes, userRoutes } from "./routes/users.js";
@@ -30,6 +31,7 @@ export function createApp(deps: AppDeps, opts: { log?: boolean } = {}) {
     .use("/users/*", requireUser)
     .use("/items/*", requireUser).use("/items", requireUser)
     .use("/places/*", requireUser)
+    .use("/movies/*", requireUser)
     .use("/reviews/*", requireUser).use("/reviews", requireUser)
     .use("/feed", requireUser)
     .use("/lists/*", requireUser).use("/lists", requireUser)
@@ -37,6 +39,7 @@ export function createApp(deps: AppDeps, opts: { log?: boolean } = {}) {
     .route("/users", userRoutes)
     .route("/items", itemRoutes)
     .route("/places", placesRoutes)
+    .route("/movies", moviesRoutes)
     .route("/reviews", reviewRoutes)
     .route("/feed", feedRoutes)
     .route("/lists", listRoutes);

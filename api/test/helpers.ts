@@ -2,7 +2,8 @@ import { createApp } from "../src/app.js";
 import { createSession } from "../src/auth/session.js";
 import { openDatabase } from "../src/db/client.js";
 import { users } from "../src/db/schema.js";
-import type { PlacesClient } from "../src/lib/places.js";
+import type { PlacesClient } from "../src/sources/places.js";
+import type { TmdbClient } from "../src/sources/tmdb.js";
 import { newId } from "../src/lib/ids.js";
 
 export const fakePlaces: PlacesClient = {
@@ -14,10 +15,19 @@ export const fakePlaces: PlacesClient = {
   },
 };
 
+export const fakeTmdb: TmdbClient = {
+  async search(query) {
+    return [{ tmdbId: 346698, title: `${query} (Movie)`, year: 2023 }];
+  },
+  async details(tmdbId) {
+    return { tmdbId, title: "Barbie", year: 2023, runtime: 114, director: "Greta Gerwig" };
+  },
+};
+
 export function setup() {
   const { db, sqlite } = openDatabase(":memory:");
   const app = createApp({
-    db, places: fakePlaces, allowedEmails: new Set(), devLogin: false, secureCookies: false, appUrl: "http://localhost",
+    db, places: fakePlaces, tmdb: fakeTmdb, allowedEmails: new Set(), devLogin: false, secureCookies: false, appUrl: "http://localhost",
   });
 
   async function user(name: string, opts: { isPrivate?: boolean } = {}) {
