@@ -5,8 +5,10 @@ later on the same six questions. Small, cheap, self-hosted; portable to Cloudfla
 
 ```
 api/      Node.js API — Hono + Drizzle + SQLite. Owns the schema, migrations and all writes.
+web/      Frontend: Vite + React + TypeScript, mobile-first. Talks to /api/v1 only.
 rust/     Optional Rust read service (Axum + rusqlite) for the busiest read endpoints.
 docs/     review-model.md (the question set, SQL design, adding media) · api.md (endpoints)
+          structure.md (how the repo is laid out and why)
 ops/      Litestream and Cloudflare Tunnel config
 scripts/  parity.sh — proves Node and Rust return identical JSON, and times them
 ```
@@ -43,6 +45,12 @@ Try it with the printed token:
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/feed
+```
+
+Run the frontend (second terminal; proxies `/api` to :8080):
+
+```bash
+cd web && npm install && npm run dev   # http://localhost:5173
 ```
 
 Or sign in without Google while developing:
