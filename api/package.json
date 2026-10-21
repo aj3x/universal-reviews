@@ -7,8 +7,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "tsx watch src/server.node.ts",
-    "start": "node --import tsx src/server.node.ts",
+    "dev": "tsx watch --env-file=../.env src/server.node.ts",
+    "start": "node --import tsx --env-file=../.env src/server.node.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
     "seed": "tsx scripts/seed.ts",

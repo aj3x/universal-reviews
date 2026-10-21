@@ -6,7 +6,7 @@
  * The API key stays on the server.
  */
 
-export type PlaceSuggestion = { placeId: string; name: string; secondary: string };
+export type PlaceSuggestion = { placeId: string; name: string; secondary: string; distanceMeters?: number; types: string[] };
 export type PlaceEssentials = { placeId: string; address: string | null; lat: number | null; lng: number | null };
 
 export interface PlacesClient {
@@ -24,7 +24,10 @@ export function createPlacesClient(apiKey: string, fetchImpl: typeof fetch = fet
         sessionToken,
         includedPrimaryTypes: ["restaurant", "cafe", "bar", "bakery", "meal_takeaway"],
       };
-      if (near) body.locationBias = { circle: { center: { latitude: near.lat, longitude: near.lng }, radius: 20000 } };
+      if (near) {
+        body.locationBias = { circle: { center: { latitude: near.lat, longitude: near.lng }, radius: 20000 } };
+        body.origin = { latitude: near.lat, longitude: near.lng }; // makes Google return distanceMeters
+      }
       const res = await fetchImpl(`${BASE}/places:autocomplete`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Goog-Api-Key": apiKey },
@@ -35,20 +38,27 @@ export function createPlacesClient(apiKey: string, fetchImpl: typeof fetch = fet
         suggestions?: Array<{
           placePrediction?: {
             placeId: string;
+            distanceMeters?: number;
+            types?: string[];
             structuredFormat?: { mainText?: { text: string }; secondaryText?: { text: string } };
             text?: { text: string };
           };
         }>;
       };
-      return (json.suggestions ?? []).flatMap((s) => {
+      const out = (json.suggestions ?? []).flatMap((s): PlaceSuggestion[] => {
         const p = s.placePrediction;
         if (!p) return [];
         return [{
           placeId: p.placeId,
           name: p.structuredFormat?.mainText?.text ?? p.text?.text ?? "",
           secondary: p.structuredFormat?.secondaryText?.text ?? "",
+          types: p.types ?? [],
+          distanceMeters: p.distanceMeters,
         }];
       });
+      return out;
+      // // locationBias only nudges ranking; sort strictly by distance when we know it.
+      // return near ? out.sort((a, b) => (a.distanceMeters ?? Infinity) - (b.distanceMeters ?? Infinity)) : out;
     },
 
     async details(placeId, sessionToken) {

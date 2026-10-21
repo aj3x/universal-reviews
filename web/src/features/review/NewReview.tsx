@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import { metersToString } from "../../lib/places";
 import { api, ApiError, label, type Item, type ItemRow, type Kind, type ReviewModel, type ScoreField, type Scores } from "../../lib/api";
 
 type MovieHit = { tmdbId: number; title: string; year: number | null };
-type Suggestion = { placeId: string; name: string; secondary: string };
+type Suggestion = { placeId: string; name: string; secondary: string, distanceMeters?: number, types: string[] };
 
 export function NewReview({ model }: { model: ReviewModel }) {
   const preset = new URLSearchParams(location.hash.split("?")[1]).get("item");
@@ -23,6 +24,16 @@ function Pick({ model, onPick }: { model: ReviewModel; onPick: (i: { id: string;
   const [movies, setMovies] = useState<MovieHit[]>([]);
   const [error, setError] = useState<string>();
   const session = useRef(crypto.randomUUID());
+  const here = useRef<{ lat: number; lng: number } | undefined>(undefined);
+
+  useEffect(() => {
+    if (kind !== "restaurant" || here.current) return;
+    navigator.geolocation?.getCurrentPosition(
+      (p) => { here.current = { lat: p.coords.latitude, lng: p.coords.longitude }; },
+      () => {},
+      { maximumAge: 300000 },
+    );
+  }, [kind]);
 
   useEffect(() => {
     const term = q.trim();
@@ -30,7 +41,8 @@ function Pick({ model, onPick }: { model: ReviewModel; onPick: (i: { id: string;
     const t = setTimeout(async () => {
       api<{ data: ItemRow[] }>(`/items?kind=${kind}&q=${encodeURIComponent(term)}`).then((r) => setFound(r.data)).catch(() => {});
       if (kind === "restaurant") {
-        api<{ data: Suggestion[] }>(`/places/autocomplete?q=${encodeURIComponent(term)}&session=${session.current}`)
+        const loc = here.current ? `&lat=${here.current.lat}&lng=${here.current.lng}` : "";
+        api<{ data: Suggestion[] }>(`/places/autocomplete?q=${encodeURIComponent(term)}&session=${session.current}${loc}`)
           .then((r) => setPlaces(r.data)).catch(() => setPlaces([]));
       }
       if (kind === "movie") {
@@ -68,7 +80,8 @@ function Pick({ model, onPick }: { model: ReviewModel; onPick: (i: { id: string;
             <button className="row" onClick={() =>
               api<Item>("/items/from-place", { method: "POST", body: { placeId: p.placeId, name: p.name, sessionToken: session.current } })
                 .then(onPick).catch(fail)}>
-              {p.name}<small className="muted">{p.secondary}</small>
+              <span className="row-main">{p.name}<small className="muted">{p.secondary}</small></span>
+              {p.distanceMeters !== undefined && <small className="muted row-meta">{metersToString(p.distanceMeters)}</small>}
             </button>
           </li>
         ))}
