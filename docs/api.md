@@ -14,7 +14,8 @@ cookie (or `Authorization: Bearer <token>` for scripts). Lists are paginated wit
 | GET | `/auth/google/callback` | Creates or updates the user, sets the session, redirects to `APP_URL` |
 | POST | `/auth/dev-login` | `{ email }`; only when `DEV_LOGIN=1` and not production |
 | POST | `/auth/logout` | |
-| GET · PATCH | `/me` | `{ displayName?, isPrivate? }`. Accounts are public by default |
+| GET · PATCH | `/me` | PATCH `{ displayName?, isPrivate? }`. Accounts are public by default. GET adds `createdAt` and counts: `reviews, followers, following, requests` (pending follow requests) |
+| DELETE | `/me/sessions` | Sign out everywhere: ends all of your sessions and clears the cookie |
 | GET | `/me/reviews` | |
 | GET | `/me/followers` · `/me/following` · `/me/follow-requests` | |
 | POST | `/me/follow-requests/:userId/accept` · `/decline` | Only matters for private accounts |

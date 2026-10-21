@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Mine } from "./features/account/Mine";
+import { Profile } from "./features/account/Profile";
 import { Login } from "./features/auth/Login";
 import { Feed } from "./features/feed/Feed";
 import { ItemView } from "./features/item/ItemView";
@@ -35,7 +35,11 @@ export function App() {
   if (user === undefined || !model) return <main aria-busy="true"><p className="muted">Loading…</p></main>;
   if (user === null) return <Login onDone={load} />;
 
-  const logout = async () => { await call(client.auth.logout.$post()); setUser(null); };
+  const logout = async (everywhere: boolean) => {
+    await call(everywhere ? client.me.sessions.$delete() : client.auth.logout.$post());
+    setUser(null);
+    location.hash = "/";
+  };
 
   return (
     <>
@@ -43,13 +47,13 @@ export function App() {
       <header>
         <nav aria-label="Main">
           <a href="#/" aria-current={!route0 ? "page" : undefined}>Feed</a>
-          <a href="#/mine" aria-current={route0 === "mine" ? "page" : undefined}>Mine</a>
+          <a href="#/profile" aria-current={route0 === "profile" ? "page" : undefined}>Profile</a>
           <a href="#/new" className="primary" aria-current={route0 === "new" ? "page" : undefined}>Review</a>
         </nav>
       </header>
       <main id="main" tabIndex={-1}>
         {!route0 && <Feed />}
-        {route0 === "mine" && <Mine user={user} onLogout={logout} />}
+        {route0 === "profile" && <Profile onLogout={logout} onChanged={load} />}
         {route0 === "new" && <NewReview model={model} />}
         {route0 === "item" && route1 && <ItemView id={route1} />}
       </main>

@@ -58,6 +58,7 @@ export type ReviewModel = Ok<(typeof client)["review-model"]["$get"]>;
 export type Revisit = ReviewModel["revisit"][number];
 export type RecommendTo = ReviewModel["recommendTo"][number];
 
+export type Me = Ok<typeof client.me.$get>;
 export type Page = Ok<typeof client.feed.$get>;
 export type Review = Page["data"][number];
 export type ItemDetail = Ok<(typeof client.items)[":id"]["$get"]>;

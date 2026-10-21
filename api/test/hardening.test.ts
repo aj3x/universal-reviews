@@ -102,6 +102,24 @@ describe("input edge cases", () => {
     expect((await alex.json("PATCH", "/me", {})).status).toBe(204);
   });
 
+  it("reports profile counts on GET /me", async () => {
+    const { user } = setup();
+    const alex = await user("alex");
+    const sam = await user("sam", { isPrivate: true });
+    await alex.json("POST", `/users/${sam.id}/follow`);
+    const me = await sam.json("GET", "/me");
+    expect(me.body).toMatchObject({ reviews: 0, followers: 0, following: 0, requests: 1 });
+    expect(me.body.createdAt).toBeTruthy();
+  });
+
+  it("signs out everywhere, ending the other sessions too", async () => {
+    const { user } = setup();
+    const alex = await user("alex");
+    expect((await alex.json("GET", "/me")).status).toBe(200);
+    expect((await alex.json("DELETE", "/me/sessions")).status).toBe(204);
+    expect((await alex.json("GET", "/me")).status).toBe(401);
+  });
+
   it("404s when changing a list that is not yours", async () => {
     const { user } = setup();
     const alex = await user("alex");

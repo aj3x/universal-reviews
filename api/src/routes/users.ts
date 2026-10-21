@@ -3,16 +3,33 @@ import { and, eq, like, or, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "../context.ts";
-import { follows, users } from "../db/schema.ts";
+import { clearSessionCookie } from "../auth/session.ts";
+import { follows, sessions, users } from "../db/schema.ts";
 import { listUserReviews, pageLimit } from "../lib/queries.ts";
 import { pageQuery } from "../lib/validation.ts";
 
 const publicUser = { id: users.id, displayName: users.displayName, avatarUrl: users.avatarUrl, isPrivate: users.isPrivate };
 
 export const meRoutes = new Hono<AppEnv>()
-  .get("/", (c) => {
+  .get("/", async (c) => {
     const u = c.var.user;
-    return c.json({ id: u.id, email: u.email, displayName: u.displayName, avatarUrl: u.avatarUrl, isPrivate: u.isPrivate });
+    const counts = await c.var.deps.db.get<{ followers: number; following: number; reviews: number; requests: number }>(sql`
+      SELECT
+        (SELECT COUNT(*) FROM follows WHERE followee_id = ${u.id} AND status = 'accepted') AS followers,
+        (SELECT COUNT(*) FROM follows WHERE follower_id = ${u.id} AND status = 'accepted') AS following,
+        (SELECT COUNT(*) FROM reviews WHERE user_id = ${u.id}) AS reviews,
+        (SELECT COUNT(*) FROM follows WHERE followee_id = ${u.id} AND status = 'pending') AS requests`);
+    return c.json({
+      id: u.id, email: u.email, displayName: u.displayName, avatarUrl: u.avatarUrl, isPrivate: u.isPrivate,
+      createdAt: u.createdAt, ...counts,
+    });
+  })
+
+  /** Sign out everywhere: ends every session for this user, this one included. */
+  .delete("/sessions", async (c) => {
+    await c.var.deps.db.delete(sessions).where(eq(sessions.userId, c.var.user.id));
+    clearSessionCookie(c);
+    return c.body(null, 204);
   })
 
   .patch(
