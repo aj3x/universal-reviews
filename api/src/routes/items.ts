@@ -6,6 +6,7 @@ import type { AppEnv } from "../context.js";
 import { items, movieDetails, restaurantDetails, reviews, visits } from "../db/schema.js";
 import { latest, today } from "../lib/dates.js";
 import { newId } from "../lib/ids.js";
+import { visitDate } from "../lib/validation.js";
 import { getItem, getMyReview, listItemReviews, overallOf, pageLimit } from "../lib/queries.js";
 import { ENABLED_KINDS, ITEM_KINDS } from "../review-model.js";
 
@@ -144,7 +145,7 @@ export const itemRoutes = new Hono<AppEnv>()
   /** "Went again, nothing changed": log a visit that snapshots your current review. */
   .post(
     "/:id/visits",
-    zValidator("json", z.object({ visitedOn: z.iso.date().nullish() }).default({})),
+    zValidator("json", z.object({ visitedOn: visitDate.nullish() }).default({})),
     async (c) => {
       const { db } = c.var.deps;
       const itemId = c.req.param("id");

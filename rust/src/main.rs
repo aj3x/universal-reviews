@@ -176,19 +176,37 @@ impl PageQuery {
 }
 
 /// Runs a review query (params: ?1 viewer, ?2 subject id, ?3 cursor or NULL, ?4 limit+1) into a page.
-fn review_page(conn: &Connection, sql: &str, viewer: &str, subject: &str, q: &PageQuery, with_item: bool) -> ApiResult {
+fn review_page(
+    conn: &Connection,
+    sql: &str,
+    viewer: &str,
+    subject: &str,
+    q: &PageQuery,
+    with_item: bool,
+) -> ApiResult {
     let limit = q.limit();
     let mut stmt = conn.prepare_cached(sql)?;
     let rows = stmt
-        .query_map(params![viewer, subject, q.cursor, limit + 1], |r| review_json(r, with_item))?
+        .query_map(params![viewer, subject, q.cursor, limit + 1], |r| {
+            review_json(r, with_item)
+        })?
         .collect::<Result<Vec<_>, _>>()?;
     let has_more = rows.len() as i64 > limit;
     let data: Vec<Value> = rows.into_iter().take(limit as usize).collect();
-    let next = if has_more { data.last().map(|v| v["id"].clone()) } else { None };
+    let next = if has_more {
+        data.last().map(|v| v["id"].clone())
+    } else {
+        None
+    };
     Ok(Json(json!({ "data": data, "nextCursor": next })))
 }
 
-async fn item_reviews(State(s): State<Arc<AppState>>, Path(id): Path<String>, Query(q): Query<PageQuery>, h: HeaderMap) -> ApiResult {
+async fn item_reviews(
+    State(s): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Query(q): Query<PageQuery>,
+    h: HeaderMap,
+) -> ApiResult {
     let token = session_token(&h);
     with_db(&s, move |c| {
         let viewer = viewer_id(c, token)?;
@@ -202,7 +220,11 @@ async fn item_reviews(State(s): State<Arc<AppState>>, Path(id): Path<String>, Qu
     .await
 }
 
-async fn feed(State(s): State<Arc<AppState>>, Query(q): Query<PageQuery>, h: HeaderMap) -> ApiResult {
+async fn feed(
+    State(s): State<Arc<AppState>>,
+    Query(q): Query<PageQuery>,
+    h: HeaderMap,
+) -> ApiResult {
     let token = session_token(&h);
     with_db(&s, move |c| {
         let viewer = viewer_id(c, token)?;
@@ -323,8 +345,13 @@ async fn health() -> Json<Value> {
 #[tokio::main]
 async fn main() {
     let db_path = env::var("DATABASE_PATH").unwrap_or_else(|_| "../api/data/rating.db".into());
-    let port: u16 = env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(8081);
-    let state = Arc::new(AppState { db_path: db_path.clone() });
+    let port: u16 = env::var("PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(8081);
+    let state = Arc::new(AppState {
+        db_path: db_path.clone(),
+    });
 
     let app = Router::new()
         .route("/health", get(health))

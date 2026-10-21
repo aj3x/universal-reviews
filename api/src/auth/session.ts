@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, lt } from "drizzle-orm";
 import type { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { DB } from "../db/client.js";
@@ -42,6 +42,10 @@ export async function validateSession(db: DB, token: string): Promise<SessionUse
       .where(eq(sessions.id, id));
   }
   return row.user;
+}
+
+export async function purgeExpiredSessions(db: DB) {
+  await db.delete(sessions).where(lt(sessions.expiresAt, new Date().toISOString()));
 }
 
 export async function invalidateSession(db: DB, token: string) {

@@ -8,6 +8,7 @@ api/      Node.js API — Hono + Drizzle + SQLite. Owns the schema, migrations a
 web/      Frontend: Vite + React + TypeScript, mobile-first. Talks to /api/v1 only.
 rust/     Optional Rust read service (Axum + rusqlite) for the busiest read endpoints.
 docs/     review-model.md (the question set, SQL design, adding media) · api.md (endpoints)
+          best-practices-audit.md (what was reviewed, fixed, and still open)
           structure.md (how the repo is laid out and why)
 ops/      Litestream and Cloudflare Tunnel config
 scripts/  parity.sh — proves Node and Rust return identical JSON, and times them

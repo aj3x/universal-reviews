@@ -13,6 +13,8 @@ export interface TmdbClient {
   details(tmdbId: number): Promise<MovieDetails>;
 }
 
+import { UpstreamError, upstreamFetch } from "./upstream.js";
+
 const BASE = "https://api.themoviedb.org/3";
 const yearOf = (date?: string | null) => {
   const y = Number(date?.slice(0, 4));
@@ -24,8 +26,8 @@ export function createTmdbClient(apiKey: string, fetchImpl: typeof fetch = fetch
     const url = new URL(`${BASE}${path}`);
     url.searchParams.set("api_key", apiKey);
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-    const res = await fetchImpl(url);
-    if (!res.ok) throw new Error(`TMDB ${path} failed: ${res.status}`);
+    const res = await upstreamFetch("tmdb", fetchImpl, url);
+    if (!res.ok) throw new UpstreamError("tmdb", `${path} failed: ${res.status}`);
     return res.json();
   };
 

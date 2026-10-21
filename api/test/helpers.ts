@@ -24,26 +24,27 @@ export const fakeTmdb: TmdbClient = {
   },
 };
 
-export function setup() {
+export function setup(opts: { limits?: Parameters<typeof createApp>[1] extends infer O ? (O extends { limits?: infer L } ? L : never) : never; places?: PlacesClient; allowedOrigins?: string[] } = {}) {
   const { db, sqlite } = openDatabase(":memory:");
   const app = createApp({
-    db, places: fakePlaces, tmdb: fakeTmdb, allowedEmails: new Set(), devLogin: false, secureCookies: false, appUrl: "http://localhost",
-  });
+    db, places: opts.places ?? fakePlaces, tmdb: fakeTmdb, allowedEmails: new Set(), devLogin: false, secureCookies: false, appUrl: "http://localhost",
+    allowedOrigins: opts.allowedOrigins,
+  }, { limits: opts.limits });
 
-  async function user(name: string, opts: { isPrivate?: boolean } = {}) {
+  async function user(name: string, userOpts: { isPrivate?: boolean } = {}) {
     const id = newId();
     await db.insert(users).values({
-      id, googleSub: `sub-${name}`, email: `${name}@example.com`, displayName: name, isPrivate: opts.isPrivate ?? false,
+      id, googleSub: `sub-${name}`, email: `${name}@example.com`, displayName: name, isPrivate: userOpts.isPrivate ?? false,
     });
     const { token } = await createSession(db, id);
-    const call = (method: string, path: string, body?: unknown) =>
+    const call = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}) =>
       app.request(`/api/v1${path}`, {
         method,
-        headers: { cookie: `sid=${token}`, ...(body ? { "content-type": "application/json" } : {}) },
+        headers: { cookie: `sid=${token}`, ...(body ? { "content-type": "application/json" } : {}), ...headers },
         body: body ? JSON.stringify(body) : undefined,
       });
-    return { id, token, call, json: async (method: string, path: string, body?: unknown) => {
-      const res = await call(method, path, body);
+    return { id, token, call, json: async (method: string, path: string, body?: unknown, headers?: Record<string, string>) => {
+      const res = await call(method, path, body, headers);
       return { status: res.status, body: res.status === 204 ? null : await res.json() } as { status: number; body: any };
     } };
   }

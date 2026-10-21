@@ -19,6 +19,8 @@ export type AppDeps = {
   secureCookies: boolean;
   /** Where to send the browser after sign-in. */
   appUrl: string;
+  /** Origins allowed to send state-changing requests, besides the API's own. Defaults to same-origin only. */
+  allowedOrigins?: string[];
 };
 
 export type AppEnv = {

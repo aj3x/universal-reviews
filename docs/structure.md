@@ -31,13 +31,17 @@ enough to hurt, generate them from the API, not from a shared package.
 ```
 src/
   app.ts, context.ts, server.node.ts   Wiring. Runtime-neutral except server.node.ts.
+  config.ts                            Validates the environment once at startup; fails fast.
   review-model.ts                      The six questions, kinds, and per-kind wording.
   db/                                  Schema, client, migrations runner.
   auth/                                Sessions and Google OIDC.
   routes/                              HTTP only: parse, call, shape the response.
-  lib/                                 Plain SQL read paths (queries.ts), ids.
-  sources/                             External catalogues: places.ts (Google), tmdb.ts.
-drizzle/                               Generated migrations. Never edit by hand.
+  lib/                                 Plain SQL read paths (queries.ts), ids, dates, validation,
+                                       rate-limit middleware.
+  sources/                             External catalogues: places.ts (Google), tmdb.ts;
+                                       upstream.ts (timeout + UpstreamError, mapped to 502).
+drizzle/                               Generated migrations. Edit only to add data steps drizzle
+                                       cannot generate (see 0002, 0003), and test them on old rows.
 scripts/                               seed.ts, parity.ts.
 test/                                  Integration tests over the in-memory app.
 ```

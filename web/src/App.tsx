@@ -4,7 +4,7 @@ import { Login } from "./features/auth/Login";
 import { Feed } from "./features/feed/Feed";
 import { ItemView } from "./features/item/ItemView";
 import { NewReview } from "./features/review/NewReview";
-import { api, ApiError, type ReviewModel } from "./lib/api";
+import { api, ApiError, SESSION_EXPIRED, type ReviewModel } from "./lib/api";
 import { useRoute } from "./lib/route";
 
 type User = { id: string; displayName: string };
@@ -25,6 +25,11 @@ export function App() {
     }
   }, []);
   useEffect(() => void load(), [load]);
+  useEffect(() => {
+    const expired = () => setUser(null);
+    addEventListener(SESSION_EXPIRED, expired);
+    return () => removeEventListener(SESSION_EXPIRED, expired);
+  }, []);
 
   if (error) return <main><p role="alert">{error}</p><button onClick={() => { setError(undefined); void load(); }}>Retry</button></main>;
   if (user === undefined || !model) return <main aria-busy="true"><p className="muted">Loading…</p></main>;
@@ -34,6 +39,7 @@ export function App() {
 
   return (
     <>
+      <button type="button" className="skip" onClick={() => document.getElementById("main")?.focus()}>Skip to content</button>
       <header>
         <nav aria-label="Main">
           <a href="#/" aria-current={!route0 ? "page" : undefined}>Feed</a>
@@ -41,7 +47,7 @@ export function App() {
           <a href="#/new" className="primary" aria-current={route0 === "new" ? "page" : undefined}>Review</a>
         </nav>
       </header>
-      <main>
+      <main id="main" tabIndex={-1}>
         {!route0 && <Feed />}
         {route0 === "mine" && <Mine user={user} onLogout={logout} />}
         {route0 === "new" && <NewReview model={model} />}

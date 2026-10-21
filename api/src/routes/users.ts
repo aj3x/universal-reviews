@@ -20,6 +20,7 @@ export const meRoutes = new Hono<AppEnv>()
     async (c) => {
       const patch = c.req.valid("json");
       const { db } = c.var.deps;
+      if (patch.displayName === undefined && patch.isPrivate === undefined) return c.body(null, 204); // nothing to change
       await db.update(users).set(patch).where(eq(users.id, c.var.user.id));
       // Going public: approve anyone who was waiting.
       if (patch.isPrivate === false) {

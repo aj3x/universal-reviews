@@ -58,3 +58,8 @@ legend { padding: 0; font-weight: 600; margin-bottom: .5rem; }
 .badge { padding: .125rem .5rem; border: 1px solid var(--accent); border-radius: 1rem; color: var(--accent); font-weight: 700; }
 [role="alert"] { color: var(--danger); }
 @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.skip { position: absolute; left: .5rem; top: -4rem; z-index: 10; background: var(--card); }
+.skip:focus { top: .5rem; }
+main:focus { outline: none; }

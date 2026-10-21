@@ -55,6 +55,8 @@ export type ReviewModel = {
   prompts: Record<Kind, Record<ScoreField | "revisit" | "recommendTo", string>>;
 };
 
+export const SESSION_EXPIRED = "session-expired";
+
 export class ApiError extends Error {
   constructor(public status: number, public code: string) {
     super(code);
@@ -68,6 +70,7 @@ export async function api<T>(path: string, init?: { method?: string; body?: unkn
     body: init?.body ? JSON.stringify(init.body) : undefined,
   });
   const json = await res.json().catch(() => ({}));
+  if (res.status === 401 && path !== "/me") dispatchEvent(new Event(SESSION_EXPIRED)); // App returns to the sign-in screen
   if (!res.ok) throw new ApiError(res.status, (json as { error?: string }).error ?? "error");
   return json as T;
 }

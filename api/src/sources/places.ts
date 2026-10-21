@@ -14,6 +14,8 @@ export interface PlacesClient {
   details(placeId: string, sessionToken?: string): Promise<PlaceEssentials>;
 }
 
+import { UpstreamError, upstreamFetch } from "./upstream.js";
+
 const BASE = "https://places.googleapis.com/v1";
 
 export function createPlacesClient(apiKey: string, fetchImpl: typeof fetch = fetch): PlacesClient {
@@ -28,12 +30,12 @@ export function createPlacesClient(apiKey: string, fetchImpl: typeof fetch = fet
         body.locationBias = { circle: { center: { latitude: near.lat, longitude: near.lng }, radius: 20000 } };
         body.origin = { latitude: near.lat, longitude: near.lng }; // makes Google return distanceMeters
       }
-      const res = await fetchImpl(`${BASE}/places:autocomplete`, {
+      const res = await upstreamFetch("places", fetchImpl, `${BASE}/places:autocomplete`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Goog-Api-Key": apiKey },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error(`Places autocomplete failed: ${res.status}`);
+      if (!res.ok) throw new UpstreamError("places", `autocomplete failed: ${res.status}`);
       const json = (await res.json()) as {
         suggestions?: Array<{
           placePrediction?: {
@@ -57,17 +59,15 @@ export function createPlacesClient(apiKey: string, fetchImpl: typeof fetch = fet
         }];
       });
       return out;
-      // // locationBias only nudges ranking; sort strictly by distance when we know it.
-      // return near ? out.sort((a, b) => (a.distanceMeters ?? Infinity) - (b.distanceMeters ?? Infinity)) : out;
     },
 
     async details(placeId, sessionToken) {
       const url = new URL(`${BASE}/places/${encodeURIComponent(placeId)}`);
       if (sessionToken) url.searchParams.set("sessionToken", sessionToken);
-      const res = await fetchImpl(url, {
+      const res = await upstreamFetch("places", fetchImpl, url, {
         headers: { "X-Goog-Api-Key": apiKey, "X-Goog-FieldMask": "id,formattedAddress,location" },
       });
-      if (!res.ok) throw new Error(`Place details failed: ${res.status}`);
+      if (!res.ok) throw new UpstreamError("places", `details failed: ${res.status}`);
       const json = (await res.json()) as {
         id: string;
         formattedAddress?: string;

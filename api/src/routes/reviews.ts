@@ -6,6 +6,7 @@ import type { AppEnv } from "../context.js";
 import { items, reviews, visits } from "../db/schema.js";
 import { latest, today } from "../lib/dates.js";
 import { newId } from "../lib/ids.js";
+import { visitDate } from "../lib/validation.js";
 import { feed, getMyReview, getReview, pageLimit } from "../lib/queries.js";
 import {
   ENABLED_KINDS, ITEM_KINDS, PROMPTS, RECOMMEND_TO, REVISIT, SCALE_HELP, SCORE_FIELDS, SCORE_MAX, SCORE_MIN,
@@ -15,7 +16,7 @@ import {
 const score = z.number().int().min(SCORE_MIN).max(SCORE_MAX);
 
 const reviewFields = {
-  experiencedOn: z.iso.date().nullish(),
+  experiencedOn: visitDate.nullish(),
   scores: z.object({ enjoyment: score, impact: score, value: score, aesthetic: score }),
   revisit: z.enum(REVISIT),
   recommendTo: z.enum(RECOMMEND_TO),
@@ -35,29 +36,32 @@ export const reviewRoutes = new Hono<AppEnv>()
 
     // One review per person per item: saving again updates it and logs another visit.
     const visitedOn = input.experiencedOn ?? today();
-    const existing = await db.select({ id: reviews.id, experiencedOn: reviews.experiencedOn }).from(reviews)
-      .where(and(eq(reviews.userId, c.var.user.id), eq(reviews.itemId, input.itemId))).get();
     const fields = {
       ...input.scores,
       revisit: input.revisit,
       recommendTo: input.recommendTo,
       notes: input.notes || null,
     };
-    const id = existing?.id ?? newId();
-    if (existing) {
-      await db.update(reviews).set({
-        ...fields,
-        experiencedOn: latest(existing.experiencedOn, visitedOn),
-        updatedAt: sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
-      }).where(eq(reviews.id, id));
-    } else {
-      await db.insert(reviews).values({ id, userId: c.var.user.id, itemId: input.itemId, experiencedOn: visitedOn, ...fields });
-    }
+    const before = await db.select({ id: reviews.id, experiencedOn: reviews.experiencedOn }).from(reviews)
+      .where(and(eq(reviews.userId, c.var.user.id), eq(reviews.itemId, input.itemId))).get();
+    // One statement, so two quick taps can't race into a unique-index error.
+    await db.insert(reviews).values({ id: newId(), userId: c.var.user.id, itemId: input.itemId, experiencedOn: visitedOn, ...fields })
+      .onConflictDoUpdate({
+        target: [reviews.userId, reviews.itemId],
+        set: {
+          ...fields,
+          experiencedOn: latest(before?.experiencedOn, visitedOn),
+          updatedAt: sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
+        },
+      });
+    const saved = await db.select({ id: reviews.id }).from(reviews)
+      .where(and(eq(reviews.userId, c.var.user.id), eq(reviews.itemId, input.itemId))).get();
+    const id = saved!.id;
     await db.insert(visits).values({
       id: newId(), reviewId: id, visitedOn, ...input.scores,
       revisit: input.revisit, recommendTo: input.recommendTo, note: input.notes || null,
     });
-    return c.json(await getReview(db, c.var.user.id, id), existing ? 200 : 201);
+    return c.json(await getReview(db, c.var.user.id, id), before ? 200 : 201);
   })
 
   .get("/:id", async (c) => {

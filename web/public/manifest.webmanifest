@@ -1,0 +1,10 @@
+{
+  "name": "Custom Rating",
+  "short_name": "Rating",
+  "description": "Six questions about anything you've experienced.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fafaf9",
+  "theme_color": "#1d4ed8",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

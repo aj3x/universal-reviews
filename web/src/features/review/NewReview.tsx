@@ -58,19 +58,21 @@ function Pick({ model, onPick }: { model: ReviewModel; onPick: (i: ItemRef) => v
   useEffect(() => {
     const term = q.trim();
     if (term.length < 2) { setFound([]); setPlaces([]); setMovies([]); return; }
-    const t = setTimeout(async () => {
-      api<{ data: ItemRow[] }>(`/items?kind=${kind}&q=${encodeURIComponent(term)}&reviewedByMe=1`).then((r) => setFound(r.data)).catch(() => {});
+    let stale = false; // typing on, or switching kind, makes earlier responses irrelevant
+    const t = setTimeout(() => {
+      api<{ data: ItemRow[] }>(`/items?kind=${kind}&q=${encodeURIComponent(term)}&reviewedByMe=1`)
+        .then((r) => { if (!stale) setFound(r.data); }).catch(() => {});
       if (kind === "restaurant") {
         const loc = here.current ? `&lat=${here.current.lat}&lng=${here.current.lng}` : "";
         api<{ data: Suggestion[] }>(`/places/autocomplete?q=${encodeURIComponent(term)}&session=${session.current}${loc}`)
-          .then((r) => setPlaces(r.data)).catch(() => setPlaces([]));
+          .then((r) => { if (!stale) setPlaces(r.data); }).catch(() => { if (!stale) setPlaces([]); });
       }
       if (kind === "movie") {
         api<{ data: MovieHit[] }>(`/movies/search?q=${encodeURIComponent(term)}`)
-          .then((r) => setMovies(r.data)).catch(() => setMovies([]));
+          .then((r) => { if (!stale) setMovies(r.data); }).catch(() => { if (!stale) setMovies([]); });
       }
     }, 250);
-    return () => clearTimeout(t);
+    return () => { stale = true; clearTimeout(t); };
   }, [q, kind]);
 
   const fail = (e: unknown) => setError(e instanceof ApiError && e.code === "kind_not_enabled" ? "That kind isn't available yet." : "Couldn't add it. Try again.");
@@ -97,6 +99,7 @@ function Pick({ model, onPick }: { model: ReviewModel; onPick: (i: ItemRef) => v
       </label>
       {error && <p role="alert">{error}</p>}
       {kind === "movie" && <p className="muted"><small>Movie data from TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB.</small></p>}
+      <p className="sr-only" role="status">{q.trim().length >= 2 ? `${reviewedOnly.length + places.length + movies.length} matches` : ""}</p>
       <ul className="list">
         {reviewedOnly.map((i) => (
           <li key={i.id}>

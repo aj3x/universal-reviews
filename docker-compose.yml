@@ -29,7 +29,9 @@ services:
       - db:/data
     ports:
       - "127.0.0.1:8081:8081"
-    depends_on: [api]
+    # Wait until the API has created the database and applied migrations.
+    depends_on:
+      api: { condition: service_healthy }
 
   litestream:
     profiles: [backup]
@@ -42,7 +44,8 @@ services:
     volumes:
       - db:/data
       - ./ops/litestream.yml:/etc/litestream.yml:ro
-    depends_on: [api]
+    depends_on:
+      api: { condition: service_healthy }
 
   cloudflared:
     profiles: [tunnel]
@@ -51,7 +54,8 @@ services:
     command: tunnel --no-autoupdate run
     environment:
       TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
-    depends_on: [api]
+    depends_on:
+      api: { condition: service_healthy }
 
 volumes:
   db:

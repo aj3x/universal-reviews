@@ -34,15 +34,15 @@ export const listRoutes = new Hono<AppEnv>()
   })
 
   .patch("/:id", zValidator("json", name), async (c) => {
-    await c.var.deps.db.update(lists).set({ name: c.req.valid("json").name })
-      .where(and(eq(lists.id, c.req.param("id")), eq(lists.ownerId, c.var.user.id)));
-    return c.body(null, 204);
+    const own = and(eq(lists.id, c.req.param("id")), eq(lists.ownerId, c.var.user.id));
+    const res = await c.var.deps.db.update(lists).set({ name: c.req.valid("json").name }).where(own).returning({ id: lists.id });
+    return res.length ? c.body(null, 204) : c.json({ error: "not_found" }, 404);
   })
 
   .delete("/:id", async (c) => {
-    await c.var.deps.db.delete(lists)
-      .where(and(eq(lists.id, c.req.param("id")), eq(lists.ownerId, c.var.user.id)));
-    return c.body(null, 204);
+    const own = and(eq(lists.id, c.req.param("id")), eq(lists.ownerId, c.var.user.id));
+    const res = await c.var.deps.db.delete(lists).where(own).returning({ id: lists.id });
+    return res.length ? c.body(null, 204) : c.json({ error: "not_found" }, 404);
   })
 
   .post(
