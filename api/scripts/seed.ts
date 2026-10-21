@@ -5,7 +5,7 @@
  */
 import { createSession } from "../src/auth/session.js";
 import { openDatabase } from "../src/db/client.js";
-import { follows, items, movieDetails, restaurantDetails, reviews, users } from "../src/db/schema.js";
+import { follows, items, movieDetails, restaurantDetails, reviews, users, visits } from "../src/db/schema.js";
 import { newId } from "../src/lib/ids.js";
 import { RECOMMEND_TO, REVISIT } from "../src/review-model.js";
 
@@ -59,20 +59,30 @@ let count = 0;
 for (const p of people) {
   for (const itemId of itemIds) {
     if (rand() < 0.35) continue;
-    await db.insert(reviews).values({
+    const review = {
       id: newId(), userId: p.id, itemId,
       experiencedOn: `2026-${String(1 + Math.floor(rand() * 9)).padStart(2, "0")}-${String(1 + Math.floor(rand() * 28)).padStart(2, "0")}`,
       enjoyment: score(), impact: score(), value: score(), aesthetic: score(),
       revisit: pick(REVISIT), recommendTo: pick(RECOMMEND_TO),
       notes: rand() < 0.5 ? "Would order the same thing again." : null,
+    };
+    await db.insert(reviews).values(review);
+    await db.insert(visits).values({
+      id: newId(), reviewId: review.id, visitedOn: review.experiencedOn, enjoyment: review.enjoyment, impact: review.impact,
+      value: review.value, aesthetic: review.aesthetic, revisit: review.revisit, recommendTo: review.recommendTo, note: review.notes,
     });
     count++;
   }
 }
 
+const movieReviewId = newId();
 await db.insert(reviews).values({
-  id: newId(), userId: people[0]!.id, itemId: movieId, experiencedOn: "2026-09-01",
+  id: movieReviewId, userId: people[0]!.id, itemId: movieId, experiencedOn: "2026-09-01",
   enjoyment: 9, impact: 7, value: 8, aesthetic: 7, revisit: "regularly", recommendTo: "everyone", notes: null,
+});
+await db.insert(visits).values({
+  id: newId(), reviewId: movieReviewId, visitedOn: "2026-09-01",
+  enjoyment: 9, impact: 7, value: 8, aesthetic: 7, revisit: "regularly", recommendTo: "everyone",
 });
 count++;
 

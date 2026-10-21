@@ -1,12 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { metersToString } from "../../lib/places";
-import { api, ApiError, label, type Item, type ItemRow, type Kind, type ReviewModel, type ScoreField, type Scores } from "../../lib/api";
+import { api, ApiError, label, type Item, type ItemRow, type Kind, type MyReview, type MyReviewSummary, type ReviewModel, type ScoreField, type Scores } from "../../lib/api";
 
 type MovieHit = { tmdbId: number; title: string; year: number | null };
-// Placeholder until the API returns my review summary per item.
-type MySummary = { overall: number; revisit: string; recommendTo: string };
-const placeholderSummary = (): MySummary => ({ overall: 4.2, revisit: "regularly", recommendTo: "everyone" });
-
 const RECOMMEND_MARK: Record<string, [string, string]> = {
   everyone: ["🙂", "You'd send everyone"],
   most: ["🙂", "You'd send most people"],
@@ -14,11 +10,12 @@ const RECOMMEND_MARK: Record<string, [string, string]> = {
   nobody: ["🙁", "You wouldn't send anyone"],
 };
 
-function MyMarks({ s }: { s: MySummary }) {
+function MyMarks({ s }: { s: MyReviewSummary }) {
   const [face, faceLabel] = RECOMMEND_MARK[s.recommendTo] ?? ["", ""];
   const returns = s.revisit !== "never";
   return (
     <span className="marks">
+      <small className="visit-count" aria-label={`${s.visitCount} ${s.visitCount === 1 ? "time" : "times"}`}>×{s.visitCount}</small>
       <span role="img" aria-label={faceLabel}>{face}</span>
       <span role="img" aria-label={returns ? `You'd go back: ${label(s.revisit)}` : "You wouldn't go back"}>{returns ? "🔁" : "🚫"}</span>
       <strong className="score" aria-label={`Your overall score ${s.overall}`}>{s.overall.toFixed(1)}</strong>
@@ -30,7 +27,7 @@ type Suggestion = { placeId: string; name: string; secondary: string, distanceMe
 
 export function NewReview({ model }: { model: ReviewModel }) {
   const preset = new URLSearchParams(location.hash.split("?")[1]).get("item");
-  const [item, setItem] = useState<{ id: string; kind: Kind; title: string } | null>(null);
+  const [item, setItem] = useState<ItemRef | null>(null);
   useEffect(() => {
     if (preset) api<Item>(`/items/${preset}`).then(setItem).catch(() => {});
   }, [preset]);
@@ -38,7 +35,7 @@ export function NewReview({ model }: { model: ReviewModel }) {
   return item ? <Form model={model} item={item} onBack={() => setItem(null)} /> : <Pick model={model} onPick={setItem} />;
 }
 
-function Pick({ model, onPick }: { model: ReviewModel; onPick: (i: { id: string; kind: Kind; title: string }) => void }) {
+function Pick({ model, onPick }: { model: ReviewModel; onPick: (i: ItemRef) => void }) {
   const kinds = model.enabledKinds;
   const [kind, setKind] = useState<Kind>(kinds[0] ?? "restaurant");
   const [q, setQ] = useState("");
@@ -105,7 +102,7 @@ function Pick({ model, onPick }: { model: ReviewModel; onPick: (i: { id: string;
           <li key={i.id}>
             <button className="row reviewed" onClick={() => onPick(i)}>
               <span className="row-main">{i.title}{(i.address || i.year) && <small className="muted">{i.address ?? i.year}</small>}</span>
-              <span className="row-meta"><MyMarks s={placeholderSummary()} /></span>
+              {i.myReview && <span className="row-meta"><MyMarks s={i.myReview} /></span>}
             </button>
           </li>
         ))}
@@ -119,7 +116,7 @@ function Pick({ model, onPick }: { model: ReviewModel; onPick: (i: { id: string;
                 <span className="row-main">{p.name}<small className="muted">{p.secondary}</small></span>
                 <span className="row-meta">
                   {p.distanceMeters !== undefined && <small className="muted">{metersToString(p.distanceMeters)}</small>}
-                  {mine && <MyMarks s={placeholderSummary()} />}
+                  {mine?.myReview && <MyMarks s={mine.myReview} />}
                 </span>
               </button>
             </li>
@@ -133,7 +130,7 @@ function Pick({ model, onPick }: { model: ReviewModel; onPick: (i: { id: string;
                 api<Item>("/items/from-movie", { method: "POST", body: { tmdbId: m.tmdbId, title: m.title } })
                   .then(onPick).catch(fail)}>
                 <span className="row-main">{m.title}{m.year && <small className="muted">{m.year}</small>}</span>
-                {mine && <span className="row-meta"><MyMarks s={placeholderSummary()} /></span>}
+                {mine?.myReview && <span className="row-meta"><MyMarks s={mine.myReview} /></span>}
               </button>
             </li>
           );
@@ -151,12 +148,28 @@ function Pick({ model, onPick }: { model: ReviewModel; onPick: (i: { id: string;
   );
 }
 
-function Form({ model, item, onBack }: { model: ReviewModel; item: { id: string; kind: Kind; title: string }; onBack: () => void }) {
+type ItemRef = { id: string; kind: Kind; title: string };
+
+/** Loads your previous review (if any) so a return visit starts from your last answers. */
+function Form({ model, item, onBack }: { model: ReviewModel; item: ItemRef; onBack: () => void }) {
+  const [mine, setMine] = useState<MyReview | null | undefined>();
+  useEffect(() => {
+    setMine(undefined);
+    api<MyReview>(`/items/${item.id}/my-review`).then(setMine).catch(() => setMine(null));
+  }, [item.id]);
+  if (mine === undefined) return <p className="muted">Loading…</p>;
+  return <ReviewForm model={model} item={item} mine={mine} onBack={onBack} />;
+}
+
+const todayIso = () => new Date().toISOString().slice(0, 10);
+
+function ReviewForm({ model, item, mine, onBack }: { model: ReviewModel; item: ItemRef; mine: MyReview | null; onBack: () => void }) {
   const prompts = model.prompts[item.kind];
-  const [scores, setScores] = useState<Partial<Scores>>({});
-  const [revisit, setRevisit] = useState("");
-  const [recommendTo, setRecommendTo] = useState("");
-  const [notes, setNotes] = useState("");
+  const [scores, setScores] = useState<Partial<Scores>>(mine?.scores ?? {});
+  const [revisit, setRevisit] = useState(mine?.revisit ?? "");
+  const [recommendTo, setRecommendTo] = useState(mine?.recommendTo ?? "");
+  const [notes, setNotes] = useState(mine?.notes ?? "");
+  const [visitedOn, setVisitedOn] = useState(todayIso());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -166,13 +179,17 @@ function Form({ model, item, onBack }: { model: ReviewModel; item: { id: string;
     ...(recommendTo ? [] : [prompts?.recommendTo ?? "Recommend to"]),
   ];
   const complete = missing.length === 0;
+  const dirty = !mine
+    || model.scoreFields.some((f) => scores[f] !== mine.scores[f])
+    || revisit !== mine.revisit || recommendTo !== mine.recommendTo || (notes.trim() || null) !== mine.notes;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(undefined);
     try {
-      await api("/reviews", { method: "POST", body: { itemId: item.id, scores, revisit, recommendTo, notes: notes.trim() || null } });
+      if (mine && !dirty) await api(`/items/${item.id}/visits`, { method: "POST", body: { visitedOn } });
+      else await api("/reviews", { method: "POST", body: { itemId: item.id, experiencedOn: visitedOn, scores, revisit, recommendTo, notes: notes.trim() || null } });
       location.hash = `#/item/${item.id}`;
     } catch {
       setError("Couldn't save. Your answers are still here; try again.");
@@ -181,11 +198,17 @@ function Form({ model, item, onBack }: { model: ReviewModel; item: { id: string;
   }
 
   const range = Array.from({ length: model.scale.max - model.scale.min + 1 }, (_, i) => i + model.scale.min);
+  const times = mine?.visitCount ?? 0;
 
   return (
     <form onSubmit={submit}>
       <h1>{item.title}</h1>
       <p className="muted">{model.scale.help} <button type="button" className="link" onClick={onBack}>Change</button></p>
+      {mine && <p className="muted">You've been here {times} {times === 1 ? "time" : "times"}. Your last answers are filled in; change only what's different.</p>}
+      <label>
+        {mine ? "When was this visit?" : "When?"}
+        <input type="date" value={visitedOn} max={todayIso()} onChange={(e) => setVisitedOn(e.target.value || todayIso())} />
+      </label>
       {model.scoreFields.map((f: ScoreField) => (
         <fieldset key={f}>
           <legend>{prompts?.[f] ?? f}</legend>
@@ -204,7 +227,9 @@ function Form({ model, item, onBack }: { model: ReviewModel; item: { id: string;
       </label>
       {error && <p role="alert">{error}</p>}
       {!complete && <p className="muted">Still to answer: {missing.length} {missing.length === 1 ? "question" : "questions"}.</p>}
-      <button className="primary" disabled={!complete || busy}>Save review</button>
+      <button className="primary" disabled={!complete || busy}>
+        {!mine ? "Save review" : dirty ? "Update review & log visit" : "Went again, no changes"}
+      </button>
     </form>
   );
 }

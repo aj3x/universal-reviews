@@ -3,9 +3,10 @@ import { and, eq, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "../context.js";
-import { items, reviews } from "../db/schema.js";
+import { items, reviews, visits } from "../db/schema.js";
+import { latest, today } from "../lib/dates.js";
 import { newId } from "../lib/ids.js";
-import { feed, getReview, pageLimit } from "../lib/queries.js";
+import { feed, getMyReview, getReview, pageLimit } from "../lib/queries.js";
 import {
   ENABLED_KINDS, ITEM_KINDS, PROMPTS, RECOMMEND_TO, REVISIT, SCALE_HELP, SCORE_FIELDS, SCORE_MAX, SCORE_MIN,
   type ItemKind,
@@ -32,18 +33,31 @@ export const reviewRoutes = new Hono<AppEnv>()
     if (!item) return c.json({ error: "item_not_found" }, 404);
     if (!ENABLED_KINDS.includes(item.kind)) return c.json({ error: "kind_not_enabled", kind: item.kind }, 400);
 
-    const id = newId();
-    await db.insert(reviews).values({
-      id,
-      userId: c.var.user.id,
-      itemId: input.itemId,
-      experiencedOn: input.experiencedOn ?? null,
+    // One review per person per item: saving again updates it and logs another visit.
+    const visitedOn = input.experiencedOn ?? today();
+    const existing = await db.select({ id: reviews.id, experiencedOn: reviews.experiencedOn }).from(reviews)
+      .where(and(eq(reviews.userId, c.var.user.id), eq(reviews.itemId, input.itemId))).get();
+    const fields = {
       ...input.scores,
       revisit: input.revisit,
       recommendTo: input.recommendTo,
       notes: input.notes || null,
+    };
+    const id = existing?.id ?? newId();
+    if (existing) {
+      await db.update(reviews).set({
+        ...fields,
+        experiencedOn: latest(existing.experiencedOn, visitedOn),
+        updatedAt: sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
+      }).where(eq(reviews.id, id));
+    } else {
+      await db.insert(reviews).values({ id, userId: c.var.user.id, itemId: input.itemId, experiencedOn: visitedOn, ...fields });
+    }
+    await db.insert(visits).values({
+      id: newId(), reviewId: id, visitedOn, ...input.scores,
+      revisit: input.revisit, recommendTo: input.recommendTo, note: input.notes || null,
     });
-    return c.json(await getReview(db, c.var.user.id, id), 201);
+    return c.json(await getReview(db, c.var.user.id, id), existing ? 200 : 201);
   })
 
   .get("/:id", async (c) => {

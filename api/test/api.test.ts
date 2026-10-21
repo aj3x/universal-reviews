@@ -179,6 +179,67 @@ describe("reviews", () => {
   });
 });
 
+describe("visits", () => {
+  it("saving again updates the one review and logs another visit", async () => {
+    const { user } = setup();
+    const alex = await user("alex");
+    const item = await alex.json("POST", "/items", { kind: "restaurant", title: "Ramen" });
+    const first = await alex.json("POST", "/reviews", sampleReview(item.body.id));
+    expect(first.status).toBe(201);
+
+    const again = await alex.json("POST", "/reviews", sampleReview(item.body.id, {
+      experiencedOn: "2026-10-18", scores: { enjoyment: 4, impact: 4, value: 4, aesthetic: 4 }, revisit: "never", notes: "Slipped.",
+    }));
+    expect(again.status).toBe(200);
+    expect(again.body.id).toBe(first.body.id);
+    expect(again.body.scores.enjoyment).toBe(4);
+
+    const mine = await alex.json("GET", `/items/${item.body.id}/my-review`);
+    expect(mine.body.visitCount).toBe(2);
+    expect(mine.body.overall).toBe(4);
+    expect(mine.body.experiencedOn).toBe("2026-10-18");
+    expect(mine.body.visits.map((v: any) => v.scores.enjoyment)).toEqual([4, 8]); // newest first, old snapshot kept
+    const all = await alex.json("GET", "/me/reviews");
+    expect(all.body.data).toHaveLength(1);
+  });
+
+  it("logs a no-change visit without touching the review", async () => {
+    const { user } = setup();
+    const alex = await user("alex");
+    const item = await alex.json("POST", "/items", { kind: "restaurant", title: "Ramen" });
+    expect((await alex.json("POST", `/items/${item.body.id}/visits`, {})).status).toBe(404);
+    await alex.json("POST", "/reviews", sampleReview(item.body.id));
+    const res = await alex.json("POST", `/items/${item.body.id}/visits`, { visitedOn: "2026-10-20" });
+    expect(res.status).toBe(201);
+    expect(res.body.visitCount).toBe(2);
+    expect(res.body.scores).toEqual({ enjoyment: 8, impact: 6, value: 7, aesthetic: 5 });
+    expect(res.body.experiencedOn).toBe("2026-10-20");
+  });
+
+  it("keeps reviews separate between users and 404s my-review for strangers", async () => {
+    const { user } = setup();
+    const alex = await user("alex");
+    const sam = await user("sam");
+    const item = await alex.json("POST", "/items", { kind: "restaurant", title: "Ramen" });
+    await alex.json("POST", "/reviews", sampleReview(item.body.id));
+    expect((await sam.json("GET", `/items/${item.body.id}/my-review`)).status).toBe(404);
+    expect((await sam.json("POST", "/reviews", sampleReview(item.body.id))).status).toBe(201);
+  });
+
+  it("puts your review summary on item rows", async () => {
+    const { user } = setup();
+    const alex = await user("alex");
+    const sam = await user("sam");
+    const item = await alex.json("POST", "/items", { kind: "restaurant", title: "Ramen" });
+    await alex.json("POST", "/reviews", sampleReview(item.body.id));
+    await alex.json("POST", `/items/${item.body.id}/visits`, {});
+    const mine = await alex.json("GET", "/items?q=ramen");
+    expect(mine.body.data[0].myReview).toMatchObject({ overall: 6.5, revisit: "regularly", recommendTo: "most", visitCount: 2 });
+    const theirs = await sam.json("GET", "/items?q=ramen");
+    expect(theirs.body.data[0].myReview).toBeNull();
+  });
+});
+
 describe("item stats", () => {
   it("averages each score and counts revisit and recommend answers", async () => {
     const { user } = setup();
@@ -230,8 +291,10 @@ describe("follows, visibility and feed", () => {
   it("paginates the feed with a cursor", async () => {
     const { user } = setup();
     const alex = await user("alex");
-    const item = await alex.json("POST", "/items", { kind: "restaurant", title: "X" });
-    for (let i = 0; i < 5; i++) await alex.json("POST", "/reviews", sampleReview(item.body.id));
+    for (let i = 0; i < 5; i++) {
+      const item = await alex.json("POST", "/items", { kind: "restaurant", title: `X${i}` });
+      await alex.json("POST", "/reviews", sampleReview(item.body.id));
+    }
     const p1 = await alex.json("GET", "/feed?limit=3");
     expect(p1.body.data).toHaveLength(3);
     const p2 = await alex.json("GET", `/feed?limit=3&cursor=${p1.body.nextCursor}`);

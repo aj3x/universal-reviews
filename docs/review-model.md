@@ -13,7 +13,20 @@ Every review, of any kind of thing, answers the same six questions.
 | `revisit` | How often would you come back? | `never` · `once_more` · `a_few_times` · `regularly` · `forever` |
 | `recommendTo` | Who would you recommend it to? | `everyone` · `most` · `specific_people` · `nobody` |
 
-Plus `notes` (optional text, up to 5,000 characters) and `experiencedOn` (optional date).
+Plus `notes` (optional text, up to 5,000 characters) and `experiencedOn` (the date of the
+latest visit).
+
+## One review, many visits
+
+There is exactly one review per user per item (unique on `user_id, item_id`). It holds your
+**current opinion**. Each time you experience the thing again (a revisit, rewatch or reread)
+you either log "went again, no changes" or update your answers; both add a row to `visits`,
+which snapshots the six answers and notes as they stood that day. So the review is what you
+think now, `visits` is the history and trend, and `COUNT(*)` of visits is the "×N" shown in
+search. Other people only ever see your current review, never the visit list.
+
+The wording stays neutral (`visitCount`, "times") in the API; the per-kind prompts carry the
+medium-specific language. Dishes will later hang off a visit.
 
 **Scale:** 1 is the worst of all time, 5 is average, 10 is the best of all time, relative
 to everything of that kind you have ever experienced. Most entries should land between

@@ -126,12 +126,44 @@ export const reviews = sqliteTable(
   (t) => [
     index("reviews_item_idx").on(t.itemId, t.id),
     index("reviews_user_idx").on(t.userId, t.id),
+    uniqueIndex("reviews_user_item_unique").on(t.userId, t.itemId), // one review per person per thing
     check("reviews_enjoyment", sql`${t.enjoyment} BETWEEN 1 AND 10`),
     check("reviews_impact", sql`${t.impact} BETWEEN 1 AND 10`),
     check("reviews_value", sql`${t.value} BETWEEN 1 AND 10`),
     check("reviews_aesthetic", sql`${t.aesthetic} BETWEEN 1 AND 10`),
     check("reviews_revisit", sql`${t.revisit} IN (${inList(REVISIT)})`),
     check("reviews_recommend_to", sql`${t.recommendTo} IN (${inList(RECOMMEND_TO)})`),
+  ],
+);
+
+/**
+ * One row per time you experienced the thing (visit, rewatch, reread). `reviews` holds
+ * your current opinion; each visit snapshots the answers as they stood that day, so
+ * trends are available without ever creating a second review.
+ */
+export const visits = sqliteTable(
+  "visits",
+  {
+    id: text("id").primaryKey(), // ULID
+    reviewId: text("review_id").notNull().references(() => reviews.id, { onDelete: "cascade" }),
+    visitedOn: text("visited_on").notNull(), // YYYY-MM-DD
+    enjoyment: integer("enjoyment").notNull(),
+    impact: integer("impact").notNull(),
+    value: integer("value").notNull(),
+    aesthetic: integer("aesthetic").notNull(),
+    revisit: text("revisit", { enum: REVISIT }).notNull(),
+    recommendTo: text("recommend_to", { enum: RECOMMEND_TO }).notNull(),
+    note: text("note"),
+    createdAt: text("created_at").notNull().default(now),
+  },
+  (t) => [
+    index("visits_review_idx").on(t.reviewId, t.visitedOn),
+    check("visits_enjoyment", sql`${t.enjoyment} BETWEEN 1 AND 10`),
+    check("visits_impact", sql`${t.impact} BETWEEN 1 AND 10`),
+    check("visits_value", sql`${t.value} BETWEEN 1 AND 10`),
+    check("visits_aesthetic", sql`${t.aesthetic} BETWEEN 1 AND 10`),
+    check("visits_revisit", sql`${t.revisit} IN (${inList(REVISIT)})`),
+    check("visits_recommend_to", sql`${t.recommendTo} IN (${inList(RECOMMEND_TO)})`),
   ],
 );
 

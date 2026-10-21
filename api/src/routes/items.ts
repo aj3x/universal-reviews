@@ -1,11 +1,12 @@
 import { zValidator } from "@hono/zod-validator";
-import { and, desc, eq, exists, like, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, like, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "../context.js";
-import { items, movieDetails, restaurantDetails, reviews } from "../db/schema.js";
+import { items, movieDetails, restaurantDetails, reviews, visits } from "../db/schema.js";
+import { latest, today } from "../lib/dates.js";
 import { newId } from "../lib/ids.js";
-import { getItem, listItemReviews, pageLimit } from "../lib/queries.js";
+import { getItem, getMyReview, listItemReviews, overallOf, pageLimit } from "../lib/queries.js";
 import { ENABLED_KINDS, ITEM_KINDS } from "../review-model.js";
 
 const restaurantDetailsInput = z.object({
@@ -36,18 +37,30 @@ export const itemRoutes = new Hono<AppEnv>()
     const filters = [];
     if (q) filters.push(like(items.title, `%${q}%`));
     if (kind && (ITEM_KINDS as readonly string[]).includes(kind)) filters.push(eq(items.kind, kind as (typeof ITEM_KINDS)[number]));
-    if (c.req.query("reviewedByMe") === "1") {
-      filters.push(exists(
-        c.var.deps.db.select({ one: sql`1` }).from(reviews).where(and(eq(reviews.itemId, items.id), eq(reviews.userId, c.var.user.id))),
-      ));
-    }
+    const mine = and(eq(reviews.itemId, items.id), eq(reviews.userId, c.var.user.id));
+    if (c.req.query("reviewedByMe") === "1") filters.push(isNotNull(reviews.id));
     const rows = await c.var.deps.db
-      .select({ id: items.id, kind: items.kind, title: items.title, externalSource: items.externalSource, externalId: items.externalId, address: restaurantDetails.address, year: movieDetails.year })
+      .select({
+        id: items.id, kind: items.kind, title: items.title, externalSource: items.externalSource, externalId: items.externalId,
+        address: restaurantDetails.address, year: movieDetails.year,
+        mineId: reviews.id, enjoyment: reviews.enjoyment, impact: reviews.impact, value: reviews.value, aesthetic: reviews.aesthetic,
+        revisit: reviews.revisit, recommendTo: reviews.recommendTo,
+        visitCount: sql<number>`(SELECT COUNT(*) FROM ${visits} WHERE ${visits.reviewId} = ${reviews.id})`,
+      })
       .from(items).leftJoin(restaurantDetails, eq(restaurantDetails.itemId, items.id))
       .leftJoin(movieDetails, eq(movieDetails.itemId, items.id))
+      .leftJoin(reviews, mine)
       .where(filters.length ? and(...filters) : undefined)
       .orderBy(desc(items.id)).limit(pageLimit(c.req.query("limit")));
-    return c.json({ data: rows });
+    // `myReview` is your own summary of the item, or null if you haven't reviewed it.
+    const data = rows.map(({ mineId, enjoyment, impact, value, aesthetic, revisit, recommendTo, visitCount, ...row }) => ({
+      ...row,
+      myReview: mineId
+        ? { id: mineId, overall: overallOf({ enjoyment: enjoyment!, impact: impact!, value: value!, aesthetic: aesthetic! }), revisit: revisit!, recommendTo: recommendTo!, visitCount }
+        : null,
+    }));
+    return c.json({ data });
+
   })
 
   /** Manual entry (no Google match, or a kind without an external catalogue yet). */
@@ -121,6 +134,33 @@ export const itemRoutes = new Hono<AppEnv>()
     const item = await getItem(c.var.deps.db, c.var.user.id, c.req.param("id"));
     return item ? c.json(item) : c.json({ error: "not_found" }, 404);
   })
+
+  /** Your own review of this item with its visit history. */
+  .get("/:id/my-review", async (c) => {
+    const mine = await getMyReview(c.var.deps.db, c.var.user.id, c.req.param("id"));
+    return mine ? c.json(mine) : c.json({ error: "not_found" }, 404);
+  })
+
+  /** "Went again, nothing changed": log a visit that snapshots your current review. */
+  .post(
+    "/:id/visits",
+    zValidator("json", z.object({ visitedOn: z.iso.date().nullish() }).default({})),
+    async (c) => {
+      const { db } = c.var.deps;
+      const itemId = c.req.param("id");
+      const review = await db.select().from(reviews)
+        .where(and(eq(reviews.userId, c.var.user.id), eq(reviews.itemId, itemId))).get();
+      if (!review) return c.json({ error: "no_review" }, 404);
+      const visitedOn = c.req.valid("json").visitedOn ?? today();
+      await db.insert(visits).values({
+        id: newId(), reviewId: review.id, visitedOn,
+        enjoyment: review.enjoyment, impact: review.impact, value: review.value, aesthetic: review.aesthetic,
+        revisit: review.revisit, recommendTo: review.recommendTo,
+      });
+      await db.update(reviews).set({ experiencedOn: latest(review.experiencedOn, visitedOn) }).where(eq(reviews.id, review.id));
+      return c.json(await getMyReview(db, c.var.user.id, itemId), 201);
+    },
+  )
 
   .get("/:id/reviews", async (c) => {
     return c.json(await listItemReviews(

@@ -38,7 +38,9 @@ cookie (or `Authorization: Bearer <token>` for scripts). Lists are paginated wit
 | POST | `/items/from-movie` | `{ tmdbId, title }`; reuses the existing item for that TMDB id (200), else fetches year, runtime and director and creates it (201). `503 tmdb_not_configured` if it must fetch and no key is set |
 | POST | `/items/from-place` | `{ placeId, name, sessionToken? }`; reuses an existing item for that place |
 | POST | `/items` | Manual entry: `{ kind, title, details? }`. Restaurant details: `address, lat, lng, cuisine, priceLevel`. Movie details: `{ year?, runtime? (minutes), director? }` |
-| GET | `/items?q=&kind=&reviewedByMe=1` | Title search; `reviewedByMe=1` limits to items you have reviewed. Rows carry `externalSource`/`externalId`, plus `address` (restaurants) or `year` (movies) |
+| GET | `/items?q=&kind=&reviewedByMe=1` | Title search; `reviewedByMe=1` limits to items you have reviewed. Rows carry `externalSource`/`externalId`, plus `address` (restaurants) or `year` (movies), and `myReview` (`{ id, overall, revisit, recommendTo, visitCount }` or `null`) |
+| GET | `/items/:id/my-review` | Your review of the item with its visit history (newest first). 404 if you haven't reviewed it |
+| POST | `/items/:id/visits` | "Went again, nothing changed": logs a visit that snapshots your current review. Body `{ visitedOn? }` (defaults to today) |
 | GET | `/items/:id` **R** | `details` is restaurant `{ address, lat, lng, cuisine, priceLevel }`, movie `{ year, runtime, director }`, or null. Plus stats: averages per score, revisit and recommend counts |
 | GET | `/items/:id/reviews` **R** | |
 | PATCH | `/items/:id/details` | `{ cuisine?, priceLevel? }` (your data, not Google's) |
@@ -48,7 +50,7 @@ cookie (or `Authorization: Bearer <token>` for scripts). Lists are paginated wit
 | Method | Path | Notes |
 | --- | --- | --- |
 | GET | `/review-model?kind=` | Question set and per-kind wording. No sign-in needed |
-| POST | `/reviews` | See body below |
+| POST | `/reviews` | Save your review of an item. **Upsert**: there is one review per user per item, so a second save updates it (200) and logs another visit; the first creates it (201). See body below |
 | GET · PATCH · DELETE | `/reviews/:id` | Only the author can change or delete |
 | GET | `/feed` **R** | You + people you follow, newest first |
 
@@ -56,7 +58,7 @@ cookie (or `Authorization: Bearer <token>` for scripts). Lists are paginated wit
 POST /api/v1/reviews
 {
   "itemId": "01J…",
-  "experiencedOn": "2026-10-10",
+  "experiencedOn": "2026-10-10",   // the visit date; defaults to today
   "scores": { "enjoyment": 8, "impact": 6, "value": 7, "aesthetic": 5 },
   "revisit": "regularly",
   "recommendTo": "most",

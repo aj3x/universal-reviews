@@ -65,6 +65,47 @@ export async function getReview(db: DB, viewerId: string, reviewId: string) {
   return row ? toReviewJson(row) : null;
 }
 
+/** Round to one decimal, matching SQL ROUND(x, 1). */
+export const overallOf = (s: { enjoyment: number; impact: number; value: number; aesthetic: number }) =>
+  Math.round(((s.enjoyment + s.impact + s.value + s.aesthetic) / 4) * 10) / 10;
+
+/** Your own review of an item with its visit history, or null. Node-only (writes live here too). */
+export async function getMyReview(db: DB, userId: string, itemId: string) {
+  const r = await db.get<{
+    id: string; enjoyment: number; impact: number; value: number; aesthetic: number;
+    revisit: string; recommend_to: string; notes: string | null; experienced_on: string | null;
+  }>(sql`
+    SELECT id, enjoyment, impact, value, aesthetic, revisit, recommend_to, notes, experienced_on
+    FROM reviews WHERE user_id = ${userId} AND item_id = ${itemId}`);
+  if (!r) return null;
+  const visits = await db.all<{
+    id: string; visited_on: string; enjoyment: number; impact: number; value: number; aesthetic: number;
+    revisit: string; recommend_to: string; note: string | null;
+  }>(sql`
+    SELECT id, visited_on, enjoyment, impact, value, aesthetic, revisit, recommend_to, note
+    FROM visits WHERE review_id = ${r.id} ORDER BY visited_on DESC, id DESC`);
+  const scores = { enjoyment: r.enjoyment, impact: r.impact, value: r.value, aesthetic: r.aesthetic };
+  return {
+    id: r.id,
+    itemId,
+    scores,
+    overall: overallOf(scores),
+    revisit: r.revisit,
+    recommendTo: r.recommend_to,
+    notes: r.notes,
+    experiencedOn: r.experienced_on,
+    visitCount: visits.length,
+    visits: visits.map((v) => ({
+      id: v.id,
+      visitedOn: v.visited_on,
+      scores: { enjoyment: v.enjoyment, impact: v.impact, value: v.value, aesthetic: v.aesthetic },
+      revisit: v.revisit,
+      recommendTo: v.recommend_to,
+      note: v.note,
+    })),
+  };
+}
+
 export async function listItemReviews(db: DB, viewerId: string, itemId: string, cursor?: string, limit = PAGE_DEFAULT) {
   const rows = await db.all<ReviewRow>(sql`
     SELECT ${REVIEW_COLUMNS} FROM reviews r JOIN users u ON u.id = r.user_id

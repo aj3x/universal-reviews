@@ -29,7 +29,21 @@ export type Item = {
   };
 };
 
-export type ItemRow = { id: string; kind: Kind; title: string; externalSource?: string | null; externalId?: string | null; address?: string | null; year?: number | null };
+export type MyReviewSummary = { id: string; overall: number; revisit: string; recommendTo: string; visitCount: number };
+export type ItemRow = { id: string; kind: Kind; title: string; externalSource?: string | null; externalId?: string | null; address?: string | null; year?: number | null; myReview?: MyReviewSummary | null };
+
+export type MyReview = {
+  id: string;
+  itemId: string;
+  scores: Scores;
+  overall: number;
+  revisit: string;
+  recommendTo: string;
+  notes: string | null;
+  experiencedOn: string | null;
+  visitCount: number;
+  visits: { id: string; visitedOn: string; scores: Scores; revisit: string; recommendTo: string; note: string | null }[];
+};
 export type Page<T> = { data: T[]; nextCursor: string | null };
 
 export type ReviewModel = {
