@@ -3,6 +3,29 @@ import { metersToString } from "../../lib/places";
 import { api, ApiError, label, type Item, type ItemRow, type Kind, type ReviewModel, type ScoreField, type Scores } from "../../lib/api";
 
 type MovieHit = { tmdbId: number; title: string; year: number | null };
+// Placeholder until the API returns my review summary per item.
+type MySummary = { overall: number; revisit: string; recommendTo: string };
+const placeholderSummary = (): MySummary => ({ overall: 4.2, revisit: "regularly", recommendTo: "everyone" });
+
+const RECOMMEND_MARK: Record<string, [string, string]> = {
+  everyone: ["🙂", "You'd send everyone"],
+  most: ["🙂", "You'd send most people"],
+  specific_people: ["😐", "You'd send specific people"],
+  nobody: ["🙁", "You wouldn't send anyone"],
+};
+
+function MyMarks({ s }: { s: MySummary }) {
+  const [face, faceLabel] = RECOMMEND_MARK[s.recommendTo] ?? ["", ""];
+  const returns = s.revisit !== "never";
+  return (
+    <span className="marks">
+      <span role="img" aria-label={faceLabel}>{face}</span>
+      <span role="img" aria-label={returns ? `You'd go back: ${label(s.revisit)}` : "You wouldn't go back"}>{returns ? "🔁" : "🚫"}</span>
+      <strong className="score" aria-label={`Your overall score ${s.overall}`}>{s.overall.toFixed(1)}</strong>
+    </span>
+  );
+}
+
 type Suggestion = { placeId: string; name: string; secondary: string, distanceMeters?: number, types: string[] };
 
 export function NewReview({ model }: { model: ReviewModel }) {
@@ -55,10 +78,11 @@ function Pick({ model, onPick }: { model: ReviewModel; onPick: (i: { id: string;
 
   const fail = (e: unknown) => setError(e instanceof ApiError && e.code === "kind_not_enabled" ? "That kind isn't available yet." : "Couldn't add it. Try again.");
 
-  // Reviewed items already cover their catalogue match, so list each once.
-  const reviewedIds = new Set(found.map((i) => i.externalId).filter(Boolean));
-  const newPlaces = places.filter((p) => !reviewedIds.has(p.placeId));
-  const newMovies = movies.filter((m) => !reviewedIds.has(String(m.tmdbId)));
+  // A reviewed item and its catalogue match are one row: keep the suggestion's
+  // distance and mark it reviewed. Reviewed items with no live match list on their own.
+  const reviewedByExternal = new Map(found.filter((i) => i.externalId).map((i) => [i.externalId!, i]));
+  const shownExternal = new Set([...places.map((p) => p.placeId), ...movies.map((m) => String(m.tmdbId))]);
+  const reviewedOnly = found.filter((i) => !i.externalId || !shownExternal.has(i.externalId));
 
   return (
     <>
@@ -77,28 +101,43 @@ function Pick({ model, onPick }: { model: ReviewModel; onPick: (i: { id: string;
       {error && <p role="alert">{error}</p>}
       {kind === "movie" && <p className="muted"><small>Movie data from TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB.</small></p>}
       <ul className="list">
-        {found.map((i) => (
-          <li key={i.id}><button className="row" onClick={() => onPick(i)}><span className="row-main">{i.title}{(i.address || i.year) && <small className="muted">{i.address ?? i.year}</small>}</span><small className="badge row-meta">Reviewed</small></button></li>
-        ))}
-        {newPlaces.map((p) => (
-          <li key={p.placeId}>
-            <button className="row" onClick={() =>
-              api<Item>("/items/from-place", { method: "POST", body: { placeId: p.placeId, name: p.name, sessionToken: session.current } })
-                .then(onPick).catch(fail)}>
-              <span className="row-main">{p.name}<small className="muted">{p.secondary}</small></span>
-              {p.distanceMeters !== undefined && <small className="muted row-meta">{metersToString(p.distanceMeters)}</small>}
+        {reviewedOnly.map((i) => (
+          <li key={i.id}>
+            <button className="row reviewed" onClick={() => onPick(i)}>
+              <span className="row-main">{i.title}{(i.address || i.year) && <small className="muted">{i.address ?? i.year}</small>}</span>
+              <span className="row-meta"><MyMarks s={placeholderSummary()} /></span>
             </button>
           </li>
         ))}
-        {newMovies.map((m) => (
-          <li key={m.tmdbId}>
-            <button className="row" onClick={() =>
-              api<Item>("/items/from-movie", { method: "POST", body: { tmdbId: m.tmdbId, title: m.title } })
-                .then(onPick).catch(fail)}>
-              {m.title}{m.year && <small className="muted">{m.year}</small>}
-            </button>
-          </li>
-        ))}
+        {places.map((p) => {
+          const mine = reviewedByExternal.get(p.placeId);
+          return (
+            <li key={p.placeId}>
+              <button className={mine ? "row reviewed" : "row"} onClick={() => mine ? onPick(mine) :
+                api<Item>("/items/from-place", { method: "POST", body: { placeId: p.placeId, name: p.name, sessionToken: session.current } })
+                  .then(onPick).catch(fail)}>
+                <span className="row-main">{p.name}<small className="muted">{p.secondary}</small></span>
+                <span className="row-meta">
+                  {p.distanceMeters !== undefined && <small className="muted">{metersToString(p.distanceMeters)}</small>}
+                  {mine && <MyMarks s={placeholderSummary()} />}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+        {movies.map((m) => {
+          const mine = reviewedByExternal.get(String(m.tmdbId));
+          return (
+            <li key={m.tmdbId}>
+              <button className={mine ? "row reviewed" : "row"} onClick={() => mine ? onPick(mine) :
+                api<Item>("/items/from-movie", { method: "POST", body: { tmdbId: m.tmdbId, title: m.title } })
+                  .then(onPick).catch(fail)}>
+                <span className="row-main">{m.title}{m.year && <small className="muted">{m.year}</small>}</span>
+                {mine && <span className="row-meta"><MyMarks s={placeholderSummary()} /></span>}
+              </button>
+            </li>
+          );
+        })}
         {q.trim().length >= 2 && (
           <li>
             <button className="row" onClick={() =>

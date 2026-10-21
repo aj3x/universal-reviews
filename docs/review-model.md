@@ -10,7 +10,7 @@ Every review, of any kind of thing, answers the same six questions.
 | `impact` | Did it stay with you? | 1–10 |
 | `value` | Was it worth it? | 1–10 |
 | `aesthetic` | Did the look and feel click? | 1–10 |
-| `revisit` | How often would you come back? | `once` · `a_few_times` · `regularly` · `forever` |
+| `revisit` | How often would you come back? | `never` · `once_more` · `a_few_times` · `regularly` · `forever` |
 | `recommendTo` | Who would you recommend it to? | `everyone` · `most` · `specific_people` · `nobody` |
 
 Plus `notes` (optional text, up to 5,000 characters) and `experiencedOn` (optional date).

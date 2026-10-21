@@ -23,7 +23,7 @@ Every review answers the same six questions; only the wording changes per medium
 | Impact | Did it stay with you? | 1–10 |
 | Value | Was it worth it? | 1–10 |
 | Aesthetic | Did the look and feel click? | 1–10 |
-| Revisit | | once · a few times · regularly · forever |
+| Revisit | | never · once more · a few times · regularly · forever |
 | Recommend to | | everyone · most · specific people · nobody |
 
 **1 is the worst of all time, 5 is average, 10 is the best of all time.** Notes are

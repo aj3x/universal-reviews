@@ -25,7 +25,7 @@ use sha2::{Digest, Sha256};
 
 const PAGE_DEFAULT: i64 = 20;
 const PAGE_MAX: i64 = 50;
-const REVISIT: [&str; 4] = ["once", "a_few_times", "regularly", "forever"];
+const REVISIT: [&str; 5] = ["never", "once_more", "a_few_times", "regularly", "forever"];
 const RECOMMEND_TO: [&str; 4] = ["everyone", "most", "specific_people", "nobody"];
 
 /// Same visibility rule as Node: you wrote it, the author is public, or you follow them.

@@ -187,12 +187,12 @@ describe("item stats", () => {
     const item = await alex.json("POST", "/items", { kind: "restaurant", title: "X" });
     await alex.json("POST", "/reviews", sampleReview(item.body.id));
     await sam.json("POST", "/reviews", sampleReview(item.body.id, {
-      scores: { enjoyment: 5, impact: 5, value: 4, aesthetic: 6 }, revisit: "once", recommendTo: "nobody",
+      scores: { enjoyment: 5, impact: 5, value: 4, aesthetic: 6 }, revisit: "never", recommendTo: "nobody",
     }));
     const { body } = await alex.json("GET", `/items/${item.body.id}`);
     expect(body.stats.reviewCount).toBe(2);
     expect(body.stats.averages).toEqual({ enjoyment: 6.5, impact: 5.5, value: 5.5, aesthetic: 5.5 });
-    expect(body.stats.revisit).toEqual({ once: 1, a_few_times: 0, regularly: 1, forever: 0 });
+    expect(body.stats.revisit).toEqual({ never: 1, once_more: 0, a_few_times: 0, regularly: 1, forever: 0 });
     expect(body.stats.recommendTo).toEqual({ everyone: 0, most: 1, specific_people: 0, nobody: 1 });
   });
 });

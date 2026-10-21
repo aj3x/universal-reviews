@@ -19,7 +19,7 @@ export type ScoreField = (typeof SCORE_FIELDS)[number];
 export const SCORE_MIN = 1;
 export const SCORE_MAX = 10;
 
-export const REVISIT = ["once", "a_few_times", "regularly", "forever"] as const;
+export const REVISIT = ["never", "once_more", "a_few_times", "regularly", "forever"] as const;
 export type Revisit = (typeof REVISIT)[number];
 
 export const RECOMMEND_TO = ["everyone", "most", "specific_people", "nobody"] as const;
