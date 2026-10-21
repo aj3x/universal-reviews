@@ -118,6 +118,19 @@ describe("movies", () => {
     expect(item.body.stats.reviewCount).toBe(1);
     expect(item.body.stats.averages.enjoyment).toBe(8);
   });
+
+  it("lists only items the viewer has reviewed with reviewedByMe", async () => {
+    const { user } = setup();
+    const me = await user("alex");
+    const other = await user("sam");
+    const reviewed = await me.json("POST", "/items", { kind: "restaurant", title: "Ramen Reviewed" });
+    await me.json("POST", "/items", { kind: "restaurant", title: "Ramen Skipped" });
+    await me.json("POST", "/reviews", sampleReview(reviewed.body.id));
+    const mine = await me.json("GET", "/items?kind=restaurant&q=ramen&reviewedByMe=1");
+    expect(mine.body.data.map((i: { title: string }) => i.title)).toEqual(["Ramen Reviewed"]);
+    const theirs = await other.json("GET", "/items?kind=restaurant&q=ramen&reviewedByMe=1");
+    expect(theirs.body.data).toEqual([]);
+  });
 });
 
 describe("reviews", () => {

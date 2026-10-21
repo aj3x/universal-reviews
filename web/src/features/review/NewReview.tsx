@@ -39,7 +39,7 @@ function Pick({ model, onPick }: { model: ReviewModel; onPick: (i: { id: string;
     const term = q.trim();
     if (term.length < 2) { setFound([]); setPlaces([]); setMovies([]); return; }
     const t = setTimeout(async () => {
-      api<{ data: ItemRow[] }>(`/items?kind=${kind}&q=${encodeURIComponent(term)}`).then((r) => setFound(r.data)).catch(() => {});
+      api<{ data: ItemRow[] }>(`/items?kind=${kind}&q=${encodeURIComponent(term)}&reviewedByMe=1`).then((r) => setFound(r.data)).catch(() => {});
       if (kind === "restaurant") {
         const loc = here.current ? `&lat=${here.current.lat}&lng=${here.current.lng}` : "";
         api<{ data: Suggestion[] }>(`/places/autocomplete?q=${encodeURIComponent(term)}&session=${session.current}${loc}`)
@@ -54,6 +54,11 @@ function Pick({ model, onPick }: { model: ReviewModel; onPick: (i: { id: string;
   }, [q, kind]);
 
   const fail = (e: unknown) => setError(e instanceof ApiError && e.code === "kind_not_enabled" ? "That kind isn't available yet." : "Couldn't add it. Try again.");
+
+  // Reviewed items already cover their catalogue match, so list each once.
+  const reviewedIds = new Set(found.map((i) => i.externalId).filter(Boolean));
+  const newPlaces = places.filter((p) => !reviewedIds.has(p.placeId));
+  const newMovies = movies.filter((m) => !reviewedIds.has(String(m.tmdbId)));
 
   return (
     <>
@@ -73,9 +78,9 @@ function Pick({ model, onPick }: { model: ReviewModel; onPick: (i: { id: string;
       {kind === "movie" && <p className="muted"><small>Movie data from TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB.</small></p>}
       <ul className="list">
         {found.map((i) => (
-          <li key={i.id}><button className="row" onClick={() => onPick(i)}>{i.title}{(i.address || i.year) && <small className="muted">{i.address ?? i.year}</small>}</button></li>
+          <li key={i.id}><button className="row" onClick={() => onPick(i)}><span className="row-main">{i.title}{(i.address || i.year) && <small className="muted">{i.address ?? i.year}</small>}</span><small className="badge row-meta">Reviewed</small></button></li>
         ))}
-        {places.map((p) => (
+        {newPlaces.map((p) => (
           <li key={p.placeId}>
             <button className="row" onClick={() =>
               api<Item>("/items/from-place", { method: "POST", body: { placeId: p.placeId, name: p.name, sessionToken: session.current } })
@@ -85,7 +90,7 @@ function Pick({ model, onPick }: { model: ReviewModel; onPick: (i: { id: string;
             </button>
           </li>
         ))}
-        {movies.map((m) => (
+        {newMovies.map((m) => (
           <li key={m.tmdbId}>
             <button className="row" onClick={() =>
               api<Item>("/items/from-movie", { method: "POST", body: { tmdbId: m.tmdbId, title: m.title } })

@@ -51,5 +51,6 @@ legend { padding: 0; font-weight: 600; margin-bottom: .5rem; }
 .row:has(.row-main) { flex-direction: row; align-items: center; justify-content: space-between; gap: .75rem; }
 .row-main { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
 .row-meta { flex-shrink: 0; white-space: nowrap; }
+.badge { padding: .125rem .5rem; border: 1px solid var(--accent); border-radius: 1rem; color: var(--accent); font-weight: 700; }
 [role="alert"] { color: var(--danger); }
 @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }

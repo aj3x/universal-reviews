@@ -29,7 +29,7 @@ export type Item = {
   };
 };
 
-export type ItemRow = { id: string; kind: Kind; title: string; address?: string | null; year?: number | null };
+export type ItemRow = { id: string; kind: Kind; title: string; externalSource?: string | null; externalId?: string | null; address?: string | null; year?: number | null };
 export type Page<T> = { data: T[]; nextCursor: string | null };
 
 export type ReviewModel = {

@@ -8,7 +8,7 @@ import { newId } from "../src/lib/ids.js";
 
 export const fakePlaces: PlacesClient = {
   async autocomplete(input) {
-    return [{ placeId: "ChIJ-fake-1", name: `${input} Noodle Bar`, secondary: "Main St, Vancouver" }];
+    return [{ placeId: "ChIJ-fake-1", name: `${input} Noodle Bar`, secondary: "Main St, Vancouver", types: ["restaurant"] }];
   },
   async details(placeId) {
     return { placeId, address: "123 Main St, Vancouver, BC", lat: 49.28, lng: -123.12 };

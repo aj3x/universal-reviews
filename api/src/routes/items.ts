@@ -1,9 +1,9 @@
 import { zValidator } from "@hono/zod-validator";
-import { and, desc, eq, like } from "drizzle-orm";
+import { and, desc, eq, exists, like, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "../context.js";
-import { items, movieDetails, restaurantDetails } from "../db/schema.js";
+import { items, movieDetails, restaurantDetails, reviews } from "../db/schema.js";
 import { newId } from "../lib/ids.js";
 import { getItem, listItemReviews, pageLimit } from "../lib/queries.js";
 import { ENABLED_KINDS, ITEM_KINDS } from "../review-model.js";
@@ -36,8 +36,13 @@ export const itemRoutes = new Hono<AppEnv>()
     const filters = [];
     if (q) filters.push(like(items.title, `%${q}%`));
     if (kind && (ITEM_KINDS as readonly string[]).includes(kind)) filters.push(eq(items.kind, kind as (typeof ITEM_KINDS)[number]));
+    if (c.req.query("reviewedByMe") === "1") {
+      filters.push(exists(
+        c.var.deps.db.select({ one: sql`1` }).from(reviews).where(and(eq(reviews.itemId, items.id), eq(reviews.userId, c.var.user.id))),
+      ));
+    }
     const rows = await c.var.deps.db
-      .select({ id: items.id, kind: items.kind, title: items.title, address: restaurantDetails.address, year: movieDetails.year })
+      .select({ id: items.id, kind: items.kind, title: items.title, externalSource: items.externalSource, externalId: items.externalId, address: restaurantDetails.address, year: movieDetails.year })
       .from(items).leftJoin(restaurantDetails, eq(restaurantDetails.itemId, items.id))
       .leftJoin(movieDetails, eq(movieDetails.itemId, items.id))
       .where(filters.length ? and(...filters) : undefined)
