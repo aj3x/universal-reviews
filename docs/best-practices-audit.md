@@ -61,7 +61,7 @@ not "what would a mature product have".
 | W5 | README calls it a PWA but there was no manifest or icon | ✅ Manifest, SVG icon, theme colour. No service worker yet, so it is installable but not offline. |
 | W6 | No web tests at all | ✅ Vitest wired into CI with tests for the formatting helpers. 🟡 Component tests (the review form's dirty/clean logic is the best candidate) need `@testing-library/react`. |
 | W7 | `noUnusedLocals`/`noUnusedParameters` were off | ✅ On; nothing needed fixing. |
-| W8 | API types in `web/src/lib/api.ts` are hand-copied from the server and have already needed manual edits twice | 🟡 Hono's RPC client (`hc<AppType>`) would derive them. The routes are already chained for it. Worth doing before the API grows much more. |
+| W8 | API types in `web/src/lib/api.ts` were hand-copied from the server and had already needed manual edits twice | ✅ The web app uses Hono's typed client; every request and response type is derived from the routes. Doing it exposed loose server types (`kind: string`), now typed as the real unions. No server code reaches the bundle. |
 | W9 | Hash routing and no per-route `document.title` | 🟡 Cosmetic; set the title per route when it starts to matter for history/bookmarks. |
 
 ### Delivery, CI and ops
@@ -76,7 +76,9 @@ not "what would a mature product have".
 | D6 | Compose started Rust, Litestream and cloudflared as soon as the API container existed, before the database did | ✅ They wait for the API's health check. |
 | D7 | No `.editorconfig` | ✅ Added. |
 | D8 | `cloudflared:latest` is unpinned | 🟡 Pin to a release tag so a tunnel upgrade is a deliberate change (Dependabot will then track it). |
-| D9 | The API image runs TypeScript through `tsx` at runtime | 🟡 Fine at this size. Compiling to `dist/` would trim startup time and the image. |
+| D9 | The API image ran TypeScript through `tsx` at runtime | ✅ `tsx` is gone. Node 22.18+ strips the types itself (`.ts` import extensions, `erasableSyntaxOnly`), so there is no build step and one fewer production dependency. |
+| D13 | **The API Docker image did not build.** `npm ci` tried to compile `better-sqlite3` (the lockfile still marks it as having an install script) and the slim image has no Python or compiler | ✅ `npm ci --ignore-scripts` uses the prebuilt binaries bundled in the package. Both images now build and the API container answers its health check. |
+| D14 | `parity.sh` only built the Rust binary when none existed, so a stale binary silently compared against old behaviour | ✅ It always rebuilds (incremental). |
 | D10 | No linter or formatter for TypeScript | 🟡 Biome or ESLint plus Prettier. Check TypeScript 7 support first; the repo is on `typescript@7`. |
 | D11 | No `LICENSE` | ❓ Your call. |
 | D12 | Litestream restores are documented in a comment but never rehearsed | 🟡 Do one restore drill into a scratch directory before you rely on the backup. |
@@ -91,11 +93,11 @@ New tests are in `api/test/hardening.test.ts` and `web/src/lib/places.test.ts`.
 
 ## How this was checked
 
-API: `tsc`, 49 tests. Web: `tsc` (stricter), 3 tests, production build. Rust: `fmt`, `clippy`.
+API: `tsc`, 50 tests. Web: `tsc` (stricter, including the API's source), 9 tests, production build, and a scan of the bundle for server code. Rust: `fmt`, `clippy`.
 `scripts/parity.sh` (Node and Rust return identical JSON on a freshly seeded database),
-`docker compose config`, and a real boot of the server (health check, the origin guard, and
-a refused production config).
+`docker compose config`, a real boot of the server (health check, the origin guard, and
+a refused production config), and a build and run of both Docker images.
 
-**Not verified:** the GitHub Actions workflow itself (it has not run), a Docker image build,
-and the web UI in a browser. The accessibility and race fixes are by code reading and unit
+**Not verified:** the GitHub Actions workflow itself (it has not run), and the web UI in a
+browser. The accessibility and race fixes are by code reading and unit
 logic, not a screen reader or a throttled network.

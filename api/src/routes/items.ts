@@ -2,13 +2,13 @@ import { zValidator } from "@hono/zod-validator";
 import { and, desc, eq, isNotNull, like, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
-import type { AppEnv } from "../context.js";
-import { items, movieDetails, restaurantDetails, reviews, visits } from "../db/schema.js";
-import { latest, today } from "../lib/dates.js";
-import { newId } from "../lib/ids.js";
-import { visitDate } from "../lib/validation.js";
-import { getItem, getMyReview, listItemReviews, overallOf, pageLimit } from "../lib/queries.js";
-import { ENABLED_KINDS, ITEM_KINDS } from "../review-model.js";
+import type { AppEnv } from "../context.ts";
+import { items, movieDetails, restaurantDetails, reviews, visits } from "../db/schema.ts";
+import { latest, today } from "../lib/dates.ts";
+import { newId } from "../lib/ids.ts";
+import { pageQuery, visitDate } from "../lib/validation.ts";
+import { getItem, getMyReview, listItemReviews, overallOf, pageLimit } from "../lib/queries.ts";
+import { ENABLED_KINDS, ITEM_KINDS } from "../review-model.ts";
 
 const restaurantDetailsInput = z.object({
   address: z.string().max(300).nullish(),
@@ -32,14 +32,17 @@ const createItemInput = z.object({
 });
 
 export const itemRoutes = new Hono<AppEnv>()
-  .get("/", async (c) => {
-    const q = (c.req.query("q") ?? "").trim().replace(/[%_]/g, "");
-    const kind = c.req.query("kind");
+  .get("/", zValidator("query", pageQuery.pick({ limit: true }).extend({
+    q: z.string().optional(), kind: z.string().optional(), reviewedByMe: z.string().optional(),
+  })), async (c) => {
+    const query = c.req.valid("query");
+    const q = (query.q ?? "").trim().replace(/[%_]/g, "");
+    const kind = query.kind;
     const filters = [];
     if (q) filters.push(like(items.title, `%${q}%`));
     if (kind && (ITEM_KINDS as readonly string[]).includes(kind)) filters.push(eq(items.kind, kind as (typeof ITEM_KINDS)[number]));
     const mine = and(eq(reviews.itemId, items.id), eq(reviews.userId, c.var.user.id));
-    if (c.req.query("reviewedByMe") === "1") filters.push(isNotNull(reviews.id));
+    if (query.reviewedByMe === "1") filters.push(isNotNull(reviews.id));
     const rows = await c.var.deps.db
       .select({
         id: items.id, kind: items.kind, title: items.title, externalSource: items.externalSource, externalId: items.externalId,
@@ -52,7 +55,7 @@ export const itemRoutes = new Hono<AppEnv>()
       .leftJoin(movieDetails, eq(movieDetails.itemId, items.id))
       .leftJoin(reviews, mine)
       .where(filters.length ? and(...filters) : undefined)
-      .orderBy(desc(items.id)).limit(pageLimit(c.req.query("limit")));
+      .orderBy(desc(items.id)).limit(pageLimit(query.limit));
     // `myReview` is your own summary of the item, or null if you haven't reviewed it.
     const data = rows.map(({ mineId, enjoyment, impact, value, aesthetic, revisit, recommendTo, visitCount, ...row }) => ({
       ...row,
@@ -76,7 +79,7 @@ export const itemRoutes = new Hono<AppEnv>()
     await db.insert(items).values({ id, kind: input.kind, title: input.title, createdBy: c.var.user.id });
     if (input.kind === "restaurant") await db.insert(restaurantDetails).values({ itemId: id, ...details.data });
     if (input.kind === "movie") await db.insert(movieDetails).values({ itemId: id, ...details.data });
-    return c.json(await getItem(db, c.var.user.id, id), 201);
+    return c.json((await getItem(db, c.var.user.id, id))!, 201);
   })
 
   /** Add (or find) a restaurant from a Google place picked in autocomplete. */
@@ -92,7 +95,7 @@ export const itemRoutes = new Hono<AppEnv>()
       const { placeId, name, sessionToken } = c.req.valid("json");
       const existing = await db.select({ id: items.id }).from(items)
         .where(and(eq(items.externalSource, "google_places"), eq(items.externalId, placeId))).get();
-      if (existing) return c.json(await getItem(db, c.var.user.id, existing.id));
+      if (existing) return c.json((await getItem(db, c.var.user.id, existing.id))!);
       if (!places) return c.json({ error: "places_not_configured" }, 503);
 
       const place = await places.details(placeId, sessionToken);
@@ -103,7 +106,7 @@ export const itemRoutes = new Hono<AppEnv>()
       await db.insert(restaurantDetails).values({
         itemId: id, address: place.address, lat: place.lat, lng: place.lng, cachedAt: new Date().toISOString(),
       });
-      return c.json(await getItem(db, c.var.user.id, id), 201);
+      return c.json((await getItem(db, c.var.user.id, id))!, 201);
     },
   )
 
@@ -116,7 +119,7 @@ export const itemRoutes = new Hono<AppEnv>()
       const { tmdbId, title } = c.req.valid("json");
       const existing = await db.select({ id: items.id }).from(items)
         .where(and(eq(items.externalSource, "tmdb"), eq(items.externalId, String(tmdbId)))).get();
-      if (existing) return c.json(await getItem(db, c.var.user.id, existing.id));
+      if (existing) return c.json((await getItem(db, c.var.user.id, existing.id))!);
       if (!tmdb) return c.json({ error: "tmdb_not_configured" }, 503);
 
       const movie = await tmdb.details(tmdbId);
@@ -127,7 +130,7 @@ export const itemRoutes = new Hono<AppEnv>()
       await db.insert(movieDetails).values({
         itemId: id, year: movie.year, runtime: movie.runtime, director: movie.director, cachedAt: new Date().toISOString(),
       });
-      return c.json(await getItem(db, c.var.user.id, id), 201);
+      return c.json((await getItem(db, c.var.user.id, id))!, 201);
     },
   )
 
@@ -159,14 +162,13 @@ export const itemRoutes = new Hono<AppEnv>()
         revisit: review.revisit, recommendTo: review.recommendTo,
       });
       await db.update(reviews).set({ experiencedOn: latest(review.experiencedOn, visitedOn) }).where(eq(reviews.id, review.id));
-      return c.json(await getMyReview(db, c.var.user.id, itemId), 201);
+      return c.json((await getMyReview(db, c.var.user.id, itemId))!, 201);
     },
   )
 
-  .get("/:id/reviews", async (c) => {
-    return c.json(await listItemReviews(
-      c.var.deps.db, c.var.user.id, c.req.param("id"), c.req.query("cursor"), pageLimit(c.req.query("limit")),
-    ));
+  .get("/:id/reviews", zValidator("query", pageQuery), async (c) => {
+    const { cursor, limit } = c.req.valid("query");
+    return c.json(await listItemReviews(c.var.deps.db, c.var.user.id, c.req.param("id"), cursor, pageLimit(limit)));
   })
 
   /** Our own restaurant fields. Google-sourced fields are refreshed by a job, not edited. */
@@ -180,6 +182,6 @@ export const itemRoutes = new Hono<AppEnv>()
         .where(eq(restaurantDetails.itemId, id)).get();
       if (!exists) return c.json({ error: "not_found" }, 404);
       await db.update(restaurantDetails).set(c.req.valid("json")).where(eq(restaurantDetails.itemId, id));
-      return c.json(await getItem(db, c.var.user.id, id));
+      return c.json((await getItem(db, c.var.user.id, id))!);
     },
   );

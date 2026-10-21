@@ -4,7 +4,7 @@ import { Login } from "./features/auth/Login";
 import { Feed } from "./features/feed/Feed";
 import { ItemView } from "./features/item/ItemView";
 import { NewReview } from "./features/review/NewReview";
-import { api, ApiError, SESSION_EXPIRED, type ReviewModel } from "./lib/api";
+import { ApiError, call, client, SESSION_EXPIRED, type ReviewModel } from "./lib/api";
 import { useRoute } from "./lib/route";
 
 type User = { id: string; displayName: string };
@@ -17,8 +17,8 @@ export function App() {
 
   const load = useCallback(async () => {
     try {
-      setModel(await api<ReviewModel>("/review-model"));
-      setUser(await api<User>("/me"));
+      setModel(await call(client["review-model"].$get({ query: {} })));
+      setUser(await call(client.me.$get()));
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) setUser(null);
       else setError("Can't reach the server. Try again in a moment.");
@@ -35,7 +35,7 @@ export function App() {
   if (user === undefined || !model) return <main aria-busy="true"><p className="muted">Loading…</p></main>;
   if (user === null) return <Login onDone={load} />;
 
-  const logout = async () => { await api("/auth/logout", { method: "POST" }); setUser(null); };
+  const logout = async () => { await call(client.auth.logout.$post()); setUser(null); };
 
   return (
     <>

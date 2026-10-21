@@ -1,8 +1,8 @@
-import { usePaged } from "../../lib/usePaged";
+import { usePaged, type LoadPage } from "../../lib/usePaged";
 import { ReviewCard } from "./ReviewCard";
 
-export function ReviewList({ path, empty, showItem }: { path: string; empty: string; showItem?: boolean }) {
-  const { rows, next, state, more } = usePaged(path);
+export function ReviewList({ listKey, load, empty, showItem }: { listKey: string; load: LoadPage; empty: string; showItem?: boolean }) {
+  const { rows, next, state, more } = usePaged(listKey, load);
   return (
     <>
       {rows.map((r) => <ReviewCard key={r.id} r={r} showItem={showItem} />)}

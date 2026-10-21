@@ -1,24 +1,33 @@
+import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
-import type { AppEnv } from "../context.js";
+import { z } from "zod";
+import type { AppEnv } from "../context.ts";
 
 /** Read-only lookups against external catalogues. Nothing here touches our database. */
 
-export const placesRoutes = new Hono<AppEnv>().get("/autocomplete", async (c) => {
-  const { places } = c.var.deps;
-  if (!places) return c.json({ error: "places_not_configured" }, 503);
-  const q = (c.req.query("q") ?? "").trim();
-  const session = c.req.query("session") ?? "";
-  if (q.length < 2 || !session) return c.json({ data: [] });
-  const lat = Number(c.req.query("lat"));
-  const lng = Number(c.req.query("lng"));
-  const near = Number.isFinite(lat) && Number.isFinite(lng) && c.req.query("lat") ? { lat, lng } : undefined;
-  return c.json({ data: await places.autocomplete(q, session, near) });
-});
+const opt = z.string().optional();
 
-export const moviesRoutes = new Hono<AppEnv>().get("/search", async (c) => {
+export const placesRoutes = new Hono<AppEnv>().get(
+  "/autocomplete",
+  zValidator("query", z.object({ q: opt, session: opt, lat: opt, lng: opt })),
+  async (c) => {
+    const { places } = c.var.deps;
+    if (!places) return c.json({ error: "places_not_configured" }, 503);
+    const query = c.req.valid("query");
+    const q = (query.q ?? "").trim();
+    const session = query.session ?? "";
+    if (q.length < 2 || !session) return c.json({ data: [] });
+    const lat = Number(query.lat);
+    const lng = Number(query.lng);
+    const near = query.lat && Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : undefined;
+    return c.json({ data: await places.autocomplete(q, session, near) });
+  },
+);
+
+export const moviesRoutes = new Hono<AppEnv>().get("/search", zValidator("query", z.object({ q: opt })), async (c) => {
   const { tmdb } = c.var.deps;
   if (!tmdb) return c.json({ error: "tmdb_not_configured" }, 503);
-  const q = (c.req.query("q") ?? "").trim();
+  const q = (c.req.valid("query").q ?? "").trim();
   if (q.length < 2) return c.json({ data: [] });
   return c.json({ data: await tmdb.search(q) });
 });

@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { metersToString } from "../../lib/places";
-import { api, ApiError, label, type Item, type ItemRow, type Kind, type MyReview, type MyReviewSummary, type ReviewModel, type ScoreField, type Scores } from "../../lib/api";
+import {
+  ApiError, call, client, label,
+  type ItemRow, type Kind, type MovieSuggestion, type MyReview, type MyReviewSummary, type PlaceSuggestion,
+  type RecommendTo, type ReviewModel, type Revisit, type ScoreField, type Scores,
+} from "../../lib/api";
 
-type MovieHit = { tmdbId: number; title: string; year: number | null };
-const RECOMMEND_MARK: Record<string, [string, string]> = {
+const RECOMMEND_MARK: Record<RecommendTo, [string, string]> = {
   everyone: ["🙂", "You'd send everyone"],
   most: ["🙂", "You'd send most people"],
   specific_people: ["😐", "You'd send specific people"],
@@ -11,7 +14,7 @@ const RECOMMEND_MARK: Record<string, [string, string]> = {
 };
 
 function MyMarks({ s }: { s: MyReviewSummary }) {
-  const [face, faceLabel] = RECOMMEND_MARK[s.recommendTo] ?? ["", ""];
+  const [face, faceLabel] = RECOMMEND_MARK[s.recommendTo];
   const returns = s.revisit !== "never";
   return (
     <span className="marks">
@@ -23,13 +26,11 @@ function MyMarks({ s }: { s: MyReviewSummary }) {
   );
 }
 
-type Suggestion = { placeId: string; name: string; secondary: string, distanceMeters?: number, types: string[] };
-
 export function NewReview({ model }: { model: ReviewModel }) {
   const preset = new URLSearchParams(location.hash.split("?")[1]).get("item");
   const [item, setItem] = useState<ItemRef | null>(null);
   useEffect(() => {
-    if (preset) api<Item>(`/items/${preset}`).then(setItem).catch(() => {});
+    if (preset) call(client.items[":id"].$get({ param: { id: preset } })).then(setItem).catch(() => {});
   }, [preset]);
 
   return item ? <Form model={model} item={item} onBack={() => setItem(null)} /> : <Pick model={model} onPick={setItem} />;
@@ -40,8 +41,8 @@ function Pick({ model, onPick }: { model: ReviewModel; onPick: (i: ItemRef) => v
   const [kind, setKind] = useState<Kind>(kinds[0] ?? "restaurant");
   const [q, setQ] = useState("");
   const [found, setFound] = useState<ItemRow[]>([]);
-  const [places, setPlaces] = useState<Suggestion[]>([]);
-  const [movies, setMovies] = useState<MovieHit[]>([]);
+  const [places, setPlaces] = useState<PlaceSuggestion[]>([]);
+  const [movies, setMovies] = useState<MovieSuggestion[]>([]);
   const [error, setError] = useState<string>();
   const session = useRef(crypto.randomUUID());
   const here = useRef<{ lat: number; lng: number } | undefined>(undefined);
@@ -60,15 +61,15 @@ function Pick({ model, onPick }: { model: ReviewModel; onPick: (i: ItemRef) => v
     if (term.length < 2) { setFound([]); setPlaces([]); setMovies([]); return; }
     let stale = false; // typing on, or switching kind, makes earlier responses irrelevant
     const t = setTimeout(() => {
-      api<{ data: ItemRow[] }>(`/items?kind=${kind}&q=${encodeURIComponent(term)}&reviewedByMe=1`)
+      call(client.items.$get({ query: { kind, q: term, reviewedByMe: "1" } }))
         .then((r) => { if (!stale) setFound(r.data); }).catch(() => {});
       if (kind === "restaurant") {
-        const loc = here.current ? `&lat=${here.current.lat}&lng=${here.current.lng}` : "";
-        api<{ data: Suggestion[] }>(`/places/autocomplete?q=${encodeURIComponent(term)}&session=${session.current}${loc}`)
+        const near = here.current ? { lat: String(here.current.lat), lng: String(here.current.lng) } : {};
+        call(client.places.autocomplete.$get({ query: { q: term, session: session.current, ...near } }))
           .then((r) => { if (!stale) setPlaces(r.data); }).catch(() => { if (!stale) setPlaces([]); });
       }
       if (kind === "movie") {
-        api<{ data: MovieHit[] }>(`/movies/search?q=${encodeURIComponent(term)}`)
+        call(client.movies.search.$get({ query: { q: term } }))
           .then((r) => { if (!stale) setMovies(r.data); }).catch(() => { if (!stale) setMovies([]); });
       }
     }, 250);
@@ -114,7 +115,7 @@ function Pick({ model, onPick }: { model: ReviewModel; onPick: (i: ItemRef) => v
           return (
             <li key={p.placeId}>
               <button className={mine ? "row reviewed" : "row"} onClick={() => mine ? onPick(mine) :
-                api<Item>("/items/from-place", { method: "POST", body: { placeId: p.placeId, name: p.name, sessionToken: session.current } })
+                call(client.items["from-place"].$post({ json: { placeId: p.placeId, name: p.name, sessionToken: session.current } }))
                   .then(onPick).catch(fail)}>
                 <span className="row-main">{p.name}<small className="muted">{p.secondary}</small></span>
                 <span className="row-meta">
@@ -130,7 +131,7 @@ function Pick({ model, onPick }: { model: ReviewModel; onPick: (i: ItemRef) => v
           return (
             <li key={m.tmdbId}>
               <button className={mine ? "row reviewed" : "row"} onClick={() => mine ? onPick(mine) :
-                api<Item>("/items/from-movie", { method: "POST", body: { tmdbId: m.tmdbId, title: m.title } })
+                call(client.items["from-movie"].$post({ json: { tmdbId: m.tmdbId, title: m.title } }))
                   .then(onPick).catch(fail)}>
                 <span className="row-main">{m.title}{m.year && <small className="muted">{m.year}</small>}</span>
                 {mine?.myReview && <span className="row-meta"><MyMarks s={mine.myReview} /></span>}
@@ -141,7 +142,7 @@ function Pick({ model, onPick }: { model: ReviewModel; onPick: (i: ItemRef) => v
         {q.trim().length >= 2 && (
           <li>
             <button className="row" onClick={() =>
-              api<Item>("/items", { method: "POST", body: { kind, title: q.trim() } }).then(onPick).catch(fail)}>
+              call(client.items.$post({ json: { kind, title: q.trim() } })).then(onPick).catch(fail)}>
               Add “{q.trim()}” as new
             </button>
           </li>
@@ -158,7 +159,7 @@ function Form({ model, item, onBack }: { model: ReviewModel; item: ItemRef; onBa
   const [mine, setMine] = useState<MyReview | null | undefined>();
   useEffect(() => {
     setMine(undefined);
-    api<MyReview>(`/items/${item.id}/my-review`).then(setMine).catch(() => setMine(null));
+    call(client.items[":id"]["my-review"].$get({ param: { id: item.id } })).then(setMine).catch(() => setMine(null));
   }, [item.id]);
   if (mine === undefined) return <p className="muted">Loading…</p>;
   return <ReviewForm model={model} item={item} mine={mine} onBack={onBack} />;
@@ -169,8 +170,8 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 function ReviewForm({ model, item, mine, onBack }: { model: ReviewModel; item: ItemRef; mine: MyReview | null; onBack: () => void }) {
   const prompts = model.prompts[item.kind];
   const [scores, setScores] = useState<Partial<Scores>>(mine?.scores ?? {});
-  const [revisit, setRevisit] = useState(mine?.revisit ?? "");
-  const [recommendTo, setRecommendTo] = useState(mine?.recommendTo ?? "");
+  const [revisit, setRevisit] = useState<Revisit | "">(mine?.revisit ?? "");
+  const [recommendTo, setRecommendTo] = useState<RecommendTo | "">(mine?.recommendTo ?? "");
   const [notes, setNotes] = useState(mine?.notes ?? "");
   const [visitedOn, setVisitedOn] = useState(todayIso());
   const [busy, setBusy] = useState(false);
@@ -191,8 +192,12 @@ function ReviewForm({ model, item, mine, onBack }: { model: ReviewModel; item: I
     setBusy(true);
     setError(undefined);
     try {
-      if (mine && !dirty) await api(`/items/${item.id}/visits`, { method: "POST", body: { visitedOn } });
-      else await api("/reviews", { method: "POST", body: { itemId: item.id, experiencedOn: visitedOn, scores, revisit, recommendTo, notes: notes.trim() || null } });
+      if (mine && !dirty) await call(client.items[":id"].visits.$post({ param: { id: item.id }, json: { visitedOn } }));
+      else if (complete) {
+        await call(client.reviews.$post({
+          json: { itemId: item.id, experiencedOn: visitedOn, scores: scores as Scores, revisit: revisit as Revisit, recommendTo: recommendTo as RecommendTo, notes: notes.trim() || null },
+        }));
+      }
       location.hash = `#/item/${item.id}`;
     } catch {
       setError("Couldn't save. Your answers are still here; try again.");
@@ -237,7 +242,7 @@ function ReviewForm({ model, item, mine, onBack }: { model: ReviewModel; item: I
   );
 }
 
-function Choice({ name, legend, options, value, onChange }: { name: string; legend: string; options: string[]; value: string; onChange: (v: string) => void }) {
+function Choice<T extends string>({ name, legend, options, value, onChange }: { name: string; legend: string; options: readonly T[]; value: T | ""; onChange: (v: T) => void }) {
   return (
     <fieldset>
       <legend>{legend}</legend>

@@ -9,7 +9,7 @@ import {
   text,
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
-import { ITEM_KINDS, RECOMMEND_TO, REVISIT } from "../review-model.js";
+import { ITEM_KINDS, RECOMMEND_TO, REVISIT } from "../review-model.ts";
 
 const now = sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`;
 const inList = (values: readonly string[]) => sql.raw(values.map((v) => `'${v}'`).join(", "));

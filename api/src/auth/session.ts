@@ -1,9 +1,9 @@
 import { eq, lt } from "drizzle-orm";
 import type { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
-import type { DB } from "../db/client.js";
-import { sessions, users } from "../db/schema.js";
-import { hashToken, newSessionToken } from "../lib/ids.js";
+import type { DB } from "../db/client.ts";
+import { sessions, users } from "../db/schema.ts";
+import { hashToken, newSessionToken } from "../lib/ids.ts";
 
 export const SESSION_COOKIE = "sid";
 const DAY = 24 * 60 * 60 * 1000;

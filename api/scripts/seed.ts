@@ -3,11 +3,11 @@
  * prints a session token you can use as `Authorization: Bearer <token>`.
  *   DATABASE_PATH=./data/rating.db npm run seed
  */
-import { createSession } from "../src/auth/session.js";
-import { openDatabase } from "../src/db/client.js";
-import { follows, items, movieDetails, restaurantDetails, reviews, users, visits } from "../src/db/schema.js";
-import { newId } from "../src/lib/ids.js";
-import { RECOMMEND_TO, REVISIT } from "../src/review-model.js";
+import { createSession } from "../src/auth/session.ts";
+import { openDatabase } from "../src/db/client.ts";
+import { follows, items, movieDetails, restaurantDetails, reviews, users, visits } from "../src/db/schema.ts";
+import { newId } from "../src/lib/ids.ts";
+import { RECOMMEND_TO, REVISIT } from "../src/review-model.ts";
 
 const { db, sqlite } = openDatabase(process.env.DATABASE_PATH ?? "./data/rating.db");
 

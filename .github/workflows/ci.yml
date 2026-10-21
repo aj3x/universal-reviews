@@ -48,8 +48,14 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: |
+            web/package-lock.json
+            api/package-lock.json
       - run: npm ci
+      # The web app derives its API types from the API's source, so it needs the API's packages
+      # (types only; --ignore-scripts skips compiling SQLite).
+      - run: npm ci --ignore-scripts
+        working-directory: api
       - run: npm test
       - run: npm run build
       - name: No known vulnerabilities in dependencies

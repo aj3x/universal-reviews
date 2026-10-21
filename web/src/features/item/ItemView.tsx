@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { api, type Item } from "../../lib/api";
+import { call, client, type ItemDetail } from "../../lib/api";
 import { SCORES } from "../feed/ReviewCard";
 import { ReviewList } from "../feed/ReviewList";
 
 export function ItemView({ id }: { id: string }) {
-  const [item, setItem] = useState<Item | null | undefined>();
-  useEffect(() => { api<Item>(`/items/${id}`).then(setItem).catch(() => setItem(null)); }, [id]);
+  const [item, setItem] = useState<ItemDetail | null | undefined>();
+  useEffect(() => { call(client.items[":id"].$get({ param: { id } })).then(setItem).catch(() => setItem(null)); }, [id]);
   if (item === undefined) return <p className="muted">Loading…</p>;
   if (item === null) return <p role="alert">Not found.</p>;
   return (
@@ -22,7 +22,12 @@ export function ItemView({ id }: { id: string }) {
         </dl>
       )}
       <p><a className="button primary" href={`#/new?item=${item.id}`}>Review this</a></p>
-      <ReviewList path={`/items/${id}/reviews`} empty="No reviews yet." showItem={false} />
+      <ReviewList
+        listKey={`item:${id}`}
+        load={(cursor) => call(client.items[":id"].reviews.$get({ param: { id }, query: { cursor } }))}
+        empty="No reviews yet."
+        showItem={false}
+      />
     </>
   );
 }

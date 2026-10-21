@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api } from "../../lib/api";
+import { call, client } from "../../lib/api";
 
 export function Login({ onDone }: { onDone: () => void }) {
   const [email, setEmail] = useState("");
@@ -19,7 +19,7 @@ export function Login({ onDone }: { onDone: () => void }) {
             setBusy(true);
             setFailed(false);
             try {
-              await api("/auth/dev-login", { method: "POST", body: { email } });
+              await call(client.auth["dev-login"].$post({ json: { email } }));
               onDone();
             } catch {
               setFailed(true);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { items } from "../src/db/schema.js";
-import { createApp } from "../src/app.js";
-import { sampleReview, setup } from "./helpers.js";
+import { items } from "../src/db/schema.ts";
+import { createApp } from "../src/app.ts";
+import { sampleReview, setup } from "./helpers.ts";
 
 describe("auth", () => {
   it("rejects requests without a session", async () => {

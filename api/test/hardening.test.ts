@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { purgeExpiredSessions } from "../src/auth/session.js";
-import { loadConfig } from "../src/config.js";
-import { sessions } from "../src/db/schema.js";
-import { UpstreamError, upstreamFetch } from "../src/sources/upstream.js";
-import { sampleReview, setup } from "./helpers.js";
+import { purgeExpiredSessions } from "../src/auth/session.ts";
+import { loadConfig } from "../src/config.ts";
+import { sessions } from "../src/db/schema.ts";
+import { UpstreamError, upstreamFetch } from "../src/sources/upstream.ts";
+import { sampleReview, setup } from "./helpers.ts";
 
 describe("config", () => {
   it("applies defaults for local development", () => {
@@ -63,6 +63,17 @@ describe("request guards", () => {
     for (let i = 0; i < 2; i++) expect((await alex.json("POST", "/items", { kind: "restaurant", title: `X${i}` })).status).toBe(201);
     expect((await alex.json("POST", "/items", { kind: "restaurant", title: "X3" })).status).toBe(429);
     for (let i = 0; i < 5; i++) expect((await alex.json("GET", "/items")).status).toBe(200);
+  });
+});
+
+describe("dev login", () => {
+  it("is invisible (404, whatever the body) unless enabled", async () => {
+    const { app } = setup();
+    const post = (body: unknown) => app.request("/api/v1/auth/dev-login", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    });
+    expect((await post({ email: "a@x.com" })).status).toBe(404);
+    expect((await post({})).status).toBe(404);
   });
 });
 

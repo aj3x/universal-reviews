@@ -1,4 +1,4 @@
-import { openDatabase } from "./client.js";
+import { openDatabase } from "./client.ts";
 
 const path = process.env.DATABASE_PATH ?? "./data/rating.db";
 const { sqlite } = openDatabase(path);

@@ -13,7 +13,7 @@ export interface TmdbClient {
   details(tmdbId: number): Promise<MovieDetails>;
 }
 
-import { UpstreamError, upstreamFetch } from "./upstream.js";
+import { UpstreamError, upstreamFetch } from "./upstream.ts";
 
 const BASE = "https://api.themoviedb.org/3";
 const yearOf = (date?: string | null) => {

@@ -1,7 +1,9 @@
 /** An external catalogue (Google, TMDB) failed or timed out. Mapped to 502, not a 500 bug. */
 export class UpstreamError extends Error {
-  constructor(public service: string, detail: string) {
+  service: string;
+  constructor(service: string, detail: string) {
     super(`${service}: ${detail}`);
+    this.service = service;
   }
 }
 

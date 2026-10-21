@@ -16,7 +16,7 @@ vi.mock("openid-client", () => ({
     new URL(`https://accounts.google.com/auth?${new URLSearchParams(params)}`),
 }));
 
-import { createGoogleAuth } from "../src/auth/google.js";
+import { createGoogleAuth } from "../src/auth/google.ts";
 
 const redirect = "https://app.example/api/v1/auth/google/callback";
 const login = { state: "state1", codeVerifier: "verifier1", nonce: "nonce1" };

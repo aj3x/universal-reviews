@@ -1,18 +1,18 @@
-import { Hono } from "hono";
+import { Hono, type MiddlewareHandler } from "hono";
 import { createMiddleware } from "hono/factory";
 import { bodyLimit } from "hono/body-limit";
 import { logger } from "hono/logger";
 import { secureHeaders } from "hono/secure-headers";
-import { readSessionCookie, validateSession } from "./auth/session.js";
-import type { AppDeps, AppEnv } from "./context.js";
-import { rateLimit, type Limit } from "./lib/rate-limit.js";
-import { authRoutes } from "./routes/auth.js";
-import { itemRoutes } from "./routes/items.js";
-import { moviesRoutes, placesRoutes } from "./routes/search.js";
-import { listRoutes } from "./routes/lists.js";
-import { feedRoutes, reviewModelRoutes, reviewRoutes } from "./routes/reviews.js";
-import { meRoutes, userRoutes } from "./routes/users.js";
-import { UpstreamError } from "./sources/upstream.js";
+import { readSessionCookie, validateSession } from "./auth/session.ts";
+import type { AppDeps, AppEnv } from "./context.ts";
+import { rateLimit, type Limit } from "./lib/rate-limit.ts";
+import { authRoutes } from "./routes/auth.ts";
+import { itemRoutes } from "./routes/items.ts";
+import { moviesRoutes, placesRoutes } from "./routes/search.ts";
+import { listRoutes } from "./routes/lists.ts";
+import { feedRoutes, reviewModelRoutes, reviewRoutes } from "./routes/reviews.ts";
+import { meRoutes, userRoutes } from "./routes/users.ts";
+import { UpstreamError } from "./sources/upstream.ts";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const DEFAULT_LIMITS = {
@@ -21,24 +21,19 @@ const DEFAULT_LIMITS = {
   writes: { max: 120, windowMs: 60_000 },
 };
 
+type Guards = {
+  requireUser: MiddlewareHandler<AppEnv>;
+  externalLimit: MiddlewareHandler<AppEnv>;
+  limitWrites: MiddlewareHandler<AppEnv>;
+};
+
 /**
- * Runtime-neutral app: no Node APIs in here or in the routes, so a Workers
- * entry file can build it with a D1-backed Drizzle db later.
+ * The whole /api/v1 route tree, in its own function so `ApiType` carries every route's request
+ * and response types to the web app's typed client (`hc<ApiType>`). Keep it one chain of
+ * `.get()/.post()/.route()` calls: a statement that is not chained drops out of the type.
  */
-export function createApp(deps: AppDeps, opts: { log?: boolean; limits?: { external?: Limit; writes?: Limit } } = {}) {
-  const externalLimit = rateLimit(opts.limits?.external ?? DEFAULT_LIMITS.external);
-  const writeLimit = rateLimit(opts.limits?.writes ?? DEFAULT_LIMITS.writes);
-  const limitWrites = createMiddleware<AppEnv>((c, next) => (SAFE_METHODS.has(c.req.method) ? next() : writeLimit(c, next)));
-
-  const requireUser = createMiddleware<AppEnv>(async (c, next) => {
-    const token = readSessionCookie(c) ?? c.req.header("authorization")?.replace(/^Bearer /, "");
-    const user = token ? await validateSession(c.var.deps.db, token) : null;
-    if (!user) return c.json({ error: "unauthorized" }, 401);
-    c.set("user", user);
-    await next();
-  });
-
-  const api = new Hono<AppEnv>()
+function buildApi({ requireUser, externalLimit, limitWrites }: Guards) {
+  return new Hono<AppEnv>()
     .route("/auth", authRoutes)
     .route("/review-model", reviewModelRoutes)
     .use("/me/*", requireUser)
@@ -59,6 +54,28 @@ export function createApp(deps: AppDeps, opts: { log?: boolean; limits?: { exter
     .route("/reviews", reviewRoutes)
     .route("/feed", feedRoutes)
     .route("/lists", listRoutes);
+}
+
+export type ApiType = ReturnType<typeof buildApi>;
+
+/**
+ * Runtime-neutral app: no Node APIs in here or in the routes, so a Workers
+ * entry file can build it with a D1-backed Drizzle db later.
+ */
+export function createApp(deps: AppDeps, opts: { log?: boolean; limits?: { external?: Limit; writes?: Limit } } = {}) {
+  const externalLimit = rateLimit(opts.limits?.external ?? DEFAULT_LIMITS.external);
+  const writeLimit = rateLimit(opts.limits?.writes ?? DEFAULT_LIMITS.writes);
+  const limitWrites = createMiddleware<AppEnv>((c, next) => (SAFE_METHODS.has(c.req.method) ? next() : writeLimit(c, next)));
+
+  const requireUser = createMiddleware<AppEnv>(async (c, next) => {
+    const token = readSessionCookie(c) ?? c.req.header("authorization")?.replace(/^Bearer /, "");
+    const user = token ? await validateSession(c.var.deps.db, token) : null;
+    if (!user) return c.json({ error: "unauthorized" }, 401);
+    c.set("user", user);
+    await next();
+  });
+
+  const api = buildApi({ requireUser, externalLimit, limitWrites });
 
   const app = new Hono<AppEnv>();
   if (opts.log) app.use(logger());

@@ -22,9 +22,12 @@ ops/       Deployment config (Litestream, Cloudflare Tunnel).
 scripts/   Cross-service checks (parity.sh).
 ```
 
-Each of `api/` and `web/` is its own npm project with its own lockfile. They do not share
-code. The frontend's types in `web/src/lib/api.ts` mirror `docs/api.md`; if they ever drift
-enough to hurt, generate them from the API, not from a shared package.
+Each of `api/` and `web/` is its own npm project with its own lockfile. They share no
+runtime code. They do share **types**, in one direction: the web app imports `ApiType` (a type
+only, erased at build) and uses Hono's typed client, so every request and response type in
+`web/src/lib/api.ts` is derived from the server's routes and nothing is copied by hand. A
+type-only import cannot pull server code into the bundle; `web/` still never imports a value
+from `api/`.
 
 ## api/
 
@@ -49,6 +52,11 @@ test/                                  Integration tests over the in-memory app.
 - `sources/` holds one file per external catalogue, each exposing an interface that
   `AppDeps` injects. Tests fake the interface; production wires the real client in
   `server.node.ts`. A new medium's catalogue (Open Library for books) goes here.
+- **Routes feed the web app's types.** `app.ts` builds the route tree in one chain and
+  exports `ApiType`. Keep routes chained (`.get().post()`), declare inputs with
+  `zValidator` (`query`, `json`) so the client knows them, and type database rows with the
+  real unions (`ItemKind`, `Revisit`) rather than `string`: whatever the server returns is
+  what the browser's types say.
 - `routes/search.ts` holds the read-only catalogue lookups (`/places`, `/movies`), kept
   apart from `routes/items.ts`, which owns items stored in our database.
 
@@ -57,7 +65,7 @@ test/                                  Integration tests over the in-memory app.
 ```
 src/
   main.tsx, App.tsx, styles.css   Entry, shell + routing, tokens and components.
-  lib/                            api.ts (client + types), usePaged.ts, route.ts.
+  lib/                            api.ts (typed client + derived types), usePaged.ts, route.ts.
   features/
     auth/      Login
     feed/      Feed, ReviewList, ReviewCard (also used by account and item)

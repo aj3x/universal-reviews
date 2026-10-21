@@ -1,17 +1,19 @@
+import { zValidator } from "@hono/zod-validator";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
+import { z } from "zod";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
-import type { GoogleProfile, OAuthLogin } from "../auth/google.js";
+import type { GoogleProfile, OAuthLogin } from "../auth/google.ts";
 import {
   clearSessionCookie,
   createSession,
   invalidateSession,
   readSessionCookie,
   setSessionCookie,
-} from "../auth/session.js";
-import type { AppDeps, AppEnv } from "../context.js";
-import { users } from "../db/schema.js";
-import { newId } from "../lib/ids.js";
+} from "../auth/session.ts";
+import type { AppDeps, AppEnv } from "../context.ts";
+import { users } from "../db/schema.ts";
+import { newId } from "../lib/ids.ts";
 
 const OAUTH_COOKIE = "oauth";
 
@@ -84,19 +86,23 @@ export const authRoutes = new Hono<AppEnv>()
     return c.redirect(deps.appUrl);
   })
 
-  .post("/dev-login", async (c) => {
-    const deps = c.var.deps;
-    if (!deps.devLogin) return c.json({ error: "not_found" }, 404);
-    const body = await c.req.json<{ email?: string; name?: string }>().catch(() => ({}) as { email?: string; name?: string });
-    if (!body.email) return c.json({ error: "email_required" }, 400);
-    const userId = await upsertGoogleUser(
-      { ...deps, allowedEmails: new Set() },
-      { sub: `dev:${body.email}`, email: body.email, name: body.name ?? body.email.split("@")[0]! },
-    );
-    const { token, expiresAt } = await createSession(deps.db, userId!);
-    setSessionCookie(c, token, expiresAt, deps.secureCookies);
-    return c.json({ userId, token });
-  })
+  .post(
+    "/dev-login",
+    // Before the validator, so a production server answers 404 whatever the body is.
+    (c, next) => (c.var.deps.devLogin ? next() : c.json({ error: "not_found" }, 404)),
+    zValidator("json", z.object({ email: z.string().trim().min(1), name: z.string().optional() })),
+    async (c) => {
+      const deps = c.var.deps;
+      const body = c.req.valid("json");
+      const userId = await upsertGoogleUser(
+        { ...deps, allowedEmails: new Set() },
+        { sub: `dev:${body.email}`, email: body.email, name: body.name ?? body.email.split("@")[0]! },
+      );
+      const { token, expiresAt } = await createSession(deps.db, userId!);
+      setSessionCookie(c, token, expiresAt, deps.secureCookies);
+      return c.json({ userId, token });
+    },
+  )
 
   .post("/logout", async (c) => {
     const token = readSessionCookie(c);

@@ -1,8 +1,8 @@
-import type { GoogleAuth } from "./auth/google.js";
-import type { SessionUser } from "./auth/session.js";
-import type { DB } from "./db/client.js";
-import type { PlacesClient } from "./sources/places.js";
-import type { TmdbClient } from "./sources/tmdb.js";
+import type { GoogleAuth } from "./auth/google.ts";
+import type { SessionUser } from "./auth/session.ts";
+import type { DB } from "./db/client.ts";
+import type { PlacesClient } from "./sources/places.ts";
+import type { TmdbClient } from "./sources/tmdb.ts";
 
 export type AppDeps = {
   db: DB;

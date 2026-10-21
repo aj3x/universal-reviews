@@ -1,12 +1,12 @@
 /** Node entry point. Everything Node-specific lives here; a Workers entry would swap these lines for D1/R2 bindings. */
 import { serve } from "@hono/node-server";
-import { createApp } from "./app.js";
-import { purgeExpiredSessions } from "./auth/session.js";
-import { createGoogleAuth } from "./auth/google.js";
-import { loadConfig } from "./config.js";
-import { openDatabase } from "./db/client.js";
-import { createPlacesClient } from "./sources/places.js";
-import { createTmdbClient } from "./sources/tmdb.js";
+import { createApp } from "./app.ts";
+import { purgeExpiredSessions } from "./auth/session.ts";
+import { createGoogleAuth } from "./auth/google.ts";
+import { loadConfig } from "./config.ts";
+import { openDatabase } from "./db/client.ts";
+import { createPlacesClient } from "./sources/places.ts";
+import { createTmdbClient } from "./sources/tmdb.ts";
 
 let config: ReturnType<typeof loadConfig>;
 try {

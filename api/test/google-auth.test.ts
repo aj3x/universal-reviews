@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { createApp } from "../src/app.js";
-import type { GoogleAuth } from "../src/auth/google.js";
-import { openDatabase } from "../src/db/client.js";
+import { createApp } from "../src/app.ts";
+import type { GoogleAuth } from "../src/auth/google.ts";
+import { openDatabase } from "../src/db/client.ts";
 
 const fakeGoogle: GoogleAuth = {
   start: async () => ({

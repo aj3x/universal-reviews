@@ -2,16 +2,16 @@ import { zValidator } from "@hono/zod-validator";
 import { and, eq, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
-import type { AppEnv } from "../context.js";
-import { items, reviews, visits } from "../db/schema.js";
-import { latest, today } from "../lib/dates.js";
-import { newId } from "../lib/ids.js";
-import { visitDate } from "../lib/validation.js";
-import { feed, getMyReview, getReview, pageLimit } from "../lib/queries.js";
+import type { AppEnv } from "../context.ts";
+import { items, reviews, visits } from "../db/schema.ts";
+import { latest, today } from "../lib/dates.ts";
+import { newId } from "../lib/ids.ts";
+import { pageQuery, visitDate } from "../lib/validation.ts";
+import { feed, getReview, pageLimit } from "../lib/queries.ts";
 import {
   ENABLED_KINDS, ITEM_KINDS, PROMPTS, RECOMMEND_TO, REVISIT, SCALE_HELP, SCORE_FIELDS, SCORE_MAX, SCORE_MIN,
   type ItemKind,
-} from "../review-model.js";
+} from "../review-model.ts";
 
 const score = z.number().int().min(SCORE_MIN).max(SCORE_MAX);
 
@@ -61,7 +61,7 @@ export const reviewRoutes = new Hono<AppEnv>()
       id: newId(), reviewId: id, visitedOn, ...input.scores,
       revisit: input.revisit, recommendTo: input.recommendTo, note: input.notes || null,
     });
-    return c.json(await getReview(db, c.var.user.id, id), before ? 200 : 201);
+    return c.json((await getReview(db, c.var.user.id, id))!, before ? 200 : 201);
   })
 
   .get("/:id", async (c) => {
@@ -82,7 +82,7 @@ export const reviewRoutes = new Hono<AppEnv>()
       ...(notes !== undefined ? { notes: notes || null } : {}),
       updatedAt: sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
     }).where(own);
-    return c.json(await getReview(db, c.var.user.id, id));
+    return c.json((await getReview(db, c.var.user.id, id))!);
   })
 
   .delete("/:id", async (c) => {
@@ -94,13 +94,14 @@ export const reviewRoutes = new Hono<AppEnv>()
     return c.body(null, 204);
   });
 
-export const feedRoutes = new Hono<AppEnv>().get("/", async (c) =>
-  c.json(await feed(c.var.deps.db, c.var.user.id, c.req.query("cursor"), pageLimit(c.req.query("limit")))),
-);
+export const feedRoutes = new Hono<AppEnv>().get("/", zValidator("query", pageQuery), async (c) => {
+  const { cursor, limit } = c.req.valid("query");
+  return c.json(await feed(c.var.deps.db, c.var.user.id, cursor, pageLimit(limit)));
+});
 
 /** The question set and per-kind wording, so the PWA never hard-codes it. Public. */
-export const reviewModelRoutes = new Hono<AppEnv>().get("/", (c) => {
-  const kind = c.req.query("kind") as ItemKind | undefined;
+export const reviewModelRoutes = new Hono<AppEnv>().get("/", zValidator("query", z.object({ kind: z.string().optional() })), (c) => {
+  const kind = c.req.valid("query").kind as ItemKind | undefined;
   const kinds = kind && (ITEM_KINDS as readonly string[]).includes(kind) ? [kind] : ITEM_KINDS;
   return c.json({
     scale: { min: SCORE_MIN, max: SCORE_MAX, help: SCALE_HELP },

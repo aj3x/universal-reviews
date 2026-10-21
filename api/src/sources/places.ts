@@ -14,7 +14,7 @@ export interface PlacesClient {
   details(placeId: string, sessionToken?: string): Promise<PlaceEssentials>;
 }
 
-import { UpstreamError, upstreamFetch } from "./upstream.js";
+import { UpstreamError, upstreamFetch } from "./upstream.ts";
 
 const BASE = "https://places.googleapis.com/v1";
 

@@ -1,10 +1,10 @@
-import { createApp } from "../src/app.js";
-import { createSession } from "../src/auth/session.js";
-import { openDatabase } from "../src/db/client.js";
-import { users } from "../src/db/schema.js";
-import type { PlacesClient } from "../src/sources/places.js";
-import type { TmdbClient } from "../src/sources/tmdb.js";
-import { newId } from "../src/lib/ids.js";
+import { createApp } from "../src/app.ts";
+import { createSession } from "../src/auth/session.ts";
+import { openDatabase } from "../src/db/client.ts";
+import { users } from "../src/db/schema.ts";
+import type { PlacesClient } from "../src/sources/places.ts";
+import type { TmdbClient } from "../src/sources/tmdb.ts";
+import { newId } from "../src/lib/ids.ts";
 
 export const fakePlaces: PlacesClient = {
   async autocomplete(input) {

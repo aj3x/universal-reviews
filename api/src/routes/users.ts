@@ -2,9 +2,10 @@ import { zValidator } from "@hono/zod-validator";
 import { and, eq, like, or, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
-import type { AppEnv } from "../context.js";
-import { follows, users } from "../db/schema.js";
-import { listUserReviews, pageLimit } from "../lib/queries.js";
+import type { AppEnv } from "../context.ts";
+import { follows, users } from "../db/schema.ts";
+import { listUserReviews, pageLimit } from "../lib/queries.ts";
+import { pageQuery } from "../lib/validation.ts";
 
 const publicUser = { id: users.id, displayName: users.displayName, avatarUrl: users.avatarUrl, isPrivate: users.isPrivate };
 
@@ -30,9 +31,10 @@ export const meRoutes = new Hono<AppEnv>()
     },
   )
 
-  .get("/reviews", async (c) => {
+  .get("/reviews", zValidator("query", pageQuery), async (c) => {
     const me = c.var.user.id;
-    return c.json(await listUserReviews(c.var.deps.db, me, me, c.req.query("cursor"), pageLimit(c.req.query("limit"))));
+    const { cursor, limit } = c.req.valid("query");
+    return c.json(await listUserReviews(c.var.deps.db, me, me, cursor, pageLimit(limit)));
   })
 
   .get("/followers", async (c) => {
@@ -76,8 +78,8 @@ export const meRoutes = new Hono<AppEnv>()
   });
 
 export const userRoutes = new Hono<AppEnv>()
-  .get("/search", async (c) => {
-    const q = (c.req.query("q") ?? "").trim();
+  .get("/search", zValidator("query", z.object({ q: z.string().optional() })), async (c) => {
+    const q = (c.req.valid("query").q ?? "").trim();
     if (q.length < 2) return c.json({ data: [] });
     const pattern = `%${q.replace(/[%_]/g, "")}%`;
     const rows = await c.var.deps.db.select(publicUser).from(users)
@@ -101,10 +103,9 @@ export const userRoutes = new Hono<AppEnv>()
     return c.json({ ...user, ...counts, followStatus: mine?.status ?? "none" });
   })
 
-  .get("/:id/reviews", async (c) => {
-    return c.json(await listUserReviews(
-      c.var.deps.db, c.var.user.id, c.req.param("id"), c.req.query("cursor"), pageLimit(c.req.query("limit")),
-    ));
+  .get("/:id/reviews", zValidator("query", pageQuery), async (c) => {
+    const { cursor, limit } = c.req.valid("query");
+    return c.json(await listUserReviews(c.var.deps.db, c.var.user.id, c.req.param("id"), cursor, pageLimit(limit)));
   })
 
   .post("/:id/follow", async (c) => {

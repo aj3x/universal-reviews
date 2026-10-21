@@ -5,8 +5,8 @@
  * script (scripts/parity.ts) will catch drift.
  */
 import { sql, type SQL } from "drizzle-orm";
-import type { DB } from "../db/client.js";
-import { RECOMMEND_TO, REVISIT } from "../review-model.js";
+import type { DB } from "../db/client.ts";
+import { RECOMMEND_TO, REVISIT, type ItemKind, type RecommendTo, type Revisit } from "../review-model.ts";
 
 export const PAGE_DEFAULT = 20;
 export const PAGE_MAX = 50;
@@ -27,8 +27,8 @@ const visible = (viewerId: string) => sql`(
 type ReviewRow = {
   id: string; item_id: string; user_id: string; display_name: string; avatar_url: string | null;
   experienced_on: string | null; enjoyment: number; impact: number; value: number; aesthetic: number;
-  revisit: string; recommend_to: string; notes: string | null; created_at: string; updated_at: string;
-  item_kind?: string; item_title?: string;
+  revisit: Revisit; recommend_to: RecommendTo; notes: string | null; created_at: string; updated_at: string;
+  item_kind?: ItemKind; item_title?: string;
 };
 
 const REVIEW_COLUMNS = sql`r.id, r.item_id, r.user_id, u.display_name, u.avatar_url, r.experienced_on,
@@ -73,14 +73,14 @@ export const overallOf = (s: { enjoyment: number; impact: number; value: number;
 export async function getMyReview(db: DB, userId: string, itemId: string) {
   const r = await db.get<{
     id: string; enjoyment: number; impact: number; value: number; aesthetic: number;
-    revisit: string; recommend_to: string; notes: string | null; experienced_on: string | null;
+    revisit: Revisit; recommend_to: RecommendTo; notes: string | null; experienced_on: string | null;
   }>(sql`
     SELECT id, enjoyment, impact, value, aesthetic, revisit, recommend_to, notes, experienced_on
     FROM reviews WHERE user_id = ${userId} AND item_id = ${itemId}`);
   if (!r) return null;
   const visits = await db.all<{
     id: string; visited_on: string; enjoyment: number; impact: number; value: number; aesthetic: number;
-    revisit: string; recommend_to: string; note: string | null;
+    revisit: Revisit; recommend_to: RecommendTo; note: string | null;
   }>(sql`
     SELECT id, visited_on, enjoyment, impact, value, aesthetic, revisit, recommend_to, note
     FROM visits WHERE review_id = ${r.id} ORDER BY visited_on DESC, id DESC`);
@@ -136,7 +136,7 @@ export async function feed(db: DB, viewerId: string, cursor?: string, limit = PA
 }
 
 type ItemRow = {
-  id: string; kind: string; title: string; external_source: string | null; external_id: string | null;
+  id: string; kind: ItemKind; title: string; external_source: string | null; external_id: string | null;
   address: string | null; lat: number | null; lng: number | null; cuisine: string | null; price_level: number | null;
   year: number | null; runtime: number | null; director: string | null;
 };

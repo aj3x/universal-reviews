@@ -32,7 +32,7 @@ optional for now. Details and the design reasoning: [docs/review-model.md](docs/
 
 ## Run it locally
 
-Needs Node 22+.
+Needs Node 22.18+ (it runs the TypeScript directly, no build step). Install both `api/` and `web/`: the web app takes its API types from the API's source.
 
 ```bash
 cd api

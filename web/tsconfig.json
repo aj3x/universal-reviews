@@ -10,8 +10,12 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
+    "verbatimModuleSyntax": true,
+    "noUncheckedSideEffectImports": true,
+    "moduleDetection": "force",
     "skipLibCheck": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "types": ["vite/client"]
   },
   "include": ["src", "vite.config.ts"]

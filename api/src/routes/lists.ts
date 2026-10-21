@@ -2,9 +2,9 @@ import { zValidator } from "@hono/zod-validator";
 import { and, desc, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
-import type { AppEnv } from "../context.js";
-import { items, listItems, lists } from "../db/schema.js";
-import { newId } from "../lib/ids.js";
+import type { AppEnv } from "../context.ts";
+import { items, listItems, lists } from "../db/schema.ts";
+import { newId } from "../lib/ids.ts";
 
 const name = z.object({ name: z.string().trim().min(1).max(100) });
 
