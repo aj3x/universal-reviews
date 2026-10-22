@@ -49,7 +49,8 @@ describe("movies", () => {
   it("lists movie in the review model with its prompts", async () => {
     const { app } = setup();
     const body = await (await app.request("/api/v1/review-model?kind=movie")).json();
-    expect(body.enabledKinds).toEqual(["restaurant", "movie"]);
+    expect(body.enabledKinds).toEqual(["restaurant", "movie", "dish"]);
+    expect(body.topLevelKinds).toEqual(["restaurant", "movie"]);
     expect(body.prompts.movie.enjoyment).toBe("Did you like watching it?");
   });
 
@@ -130,6 +131,62 @@ describe("movies", () => {
     expect(mine.body.data.map((i: { title: string }) => i.title)).toEqual(["Ramen Reviewed"]);
     const theirs = await other.json("GET", "/items?kind=restaurant&q=ramen&reviewedByMe=1");
     expect(theirs.body.data).toEqual([]);
+  });
+});
+
+describe("dishes", () => {
+  async function restaurant(me: Awaited<ReturnType<ReturnType<typeof setup>["user"]>>) {
+    return (await me.json("POST", "/items", { kind: "restaurant", title: "Ramen Danbo" })).body.id as string;
+  }
+
+  it("adds a dish under a restaurant and reuses it by name, ignoring case", async () => {
+    const { user } = setup();
+    const me = await user("alex");
+    const rid = await restaurant(me);
+    const first = await me.json("POST", `/items/${rid}/dishes`, { title: "Tonkotsu Ramen" });
+    expect(first.status).toBe(201);
+    expect(first.body).toMatchObject({ kind: "dish", title: "Tonkotsu Ramen", restaurant: { id: rid, title: "Ramen Danbo" }, details: null });
+    const again = await (await user("sam")).json("POST", `/items/${rid}/dishes`, { title: "  tonkotsu ramen " });
+    expect(again.status).toBe(200);
+    expect(again.body.id).toBe(first.body.id);
+  });
+
+  it("only hangs dishes off restaurants and never creates them as standalone items", async () => {
+    const { user } = setup();
+    const me = await user("alex");
+    const movie = (await me.json("POST", "/items", { kind: "movie", title: "Paddington 2" })).body.id;
+    expect((await me.json("POST", `/items/${movie}/dishes`, { title: "Popcorn" })).status).toBe(404);
+    expect((await me.json("GET", `/items/${movie}/dishes`)).status).toBe(404);
+    expect((await me.json("POST", "/items", { kind: "dish", title: "Orphan" })).status).toBe(400);
+  });
+
+  it("lists dishes with visible stats, keeps them out of search, and labels their reviews with the restaurant", async () => {
+    const { user } = setup();
+    const me = await user("alex");
+    const other = await user("sam");
+    const rid = await restaurant(me);
+    const dish = (await me.json("POST", `/items/${rid}/dishes`, { title: "Gyoza" })).body.id;
+    await me.json("POST", `/items/${rid}/dishes`, { title: "Black Garlic Ramen" });
+    expect((await me.json("POST", "/reviews", sampleReview(dish))).status).toBe(201);
+    await other.json("POST", "/reviews", sampleReview(dish, { scores: { enjoyment: 10, impact: 10, value: 10, aesthetic: 10 } }));
+
+    const list = await me.json("GET", `/items/${rid}/dishes`);
+    expect(list.body.data.map((d: any) => d.title)).toEqual(["Black Garlic Ramen", "Gyoza"]);
+    expect(list.body.data[1]).toEqual({ id: dish, title: "Gyoza", reviewCount: 2, overall: 8.3, myOverall: 6.5 });
+    expect(list.body.data[0]).toMatchObject({ reviewCount: 0, overall: null, myOverall: null });
+
+    expect((await me.json("GET", "/items?q=Gyoza")).body.data).toEqual([]);
+    const mine = await me.json("GET", "/me/reviews");
+    expect(mine.body.data[0].item).toEqual({ id: dish, kind: "dish", title: "Gyoza", restaurant: { id: rid, title: "Ramen Danbo" } });
+  });
+
+  it("deletes a restaurant's dishes with it", async () => {
+    const { user, sqlite } = setup();
+    const me = await user("alex");
+    const rid = await restaurant(me);
+    await me.json("POST", `/items/${rid}/dishes`, { title: "Gyoza" });
+    sqlite.prepare("DELETE FROM items WHERE id = ?").run(rid);
+    expect(sqlite.prepare("SELECT COUNT(*) AS n FROM items").get()).toEqual({ n: 0 });
   });
 });
 

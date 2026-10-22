@@ -7,11 +7,14 @@
  *   1 = worst of all time · 5 = average · 10 = best of all time
  */
 
-export const ITEM_KINDS = ["restaurant", "movie", "book"] as const;
+export const ITEM_KINDS = ["restaurant", "movie", "book", "dish"] as const;
 export type ItemKind = (typeof ITEM_KINDS)[number];
 
 /** Kinds the app accepts reviews for today. Books are modelled but not switched on. */
-export const ENABLED_KINDS: readonly ItemKind[] = ["restaurant", "movie"];
+export const ENABLED_KINDS: readonly ItemKind[] = ["restaurant", "movie", "dish"];
+
+/** Kinds that stand on their own: searched, listed and added directly. A dish lives under a restaurant. */
+export const TOP_LEVEL_KINDS: readonly ItemKind[] = ["restaurant", "movie"];
 
 export const SCORE_FIELDS = ["enjoyment", "impact", "value", "aesthetic"] as const;
 export type ScoreField = (typeof SCORE_FIELDS)[number];
@@ -44,6 +47,14 @@ export const PROMPTS: Record<ItemKind, Prompts> = {
     aesthetic: "Did the look, sound and style click?",
     revisit: "How often would you rewatch it?",
     recommendTo: "Who would you tell to watch it?",
+  },
+  dish: {
+    enjoyment: "Did you like the dish?",
+    impact: "Do you still think about it?",
+    value: "Was it worth the price?",
+    aesthetic: "Did the flavour, texture and plating click?",
+    revisit: "How often would you order it again?",
+    recommendTo: "Who would you tell to order it?",
   },
   book: {
     enjoyment: "Did you like reading it?",

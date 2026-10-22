@@ -42,6 +42,9 @@ for (const [i, title] of places.entries()) {
   });
 }
 
+const dishId = newId();
+await db.insert(items).values({ id: dishId, kind: "dish", title: "Tonkotsu Ramen", parentId: itemIds[2]!, createdBy: people[0]!.id });
+
 const movieId = newId();
 await db.insert(items).values({ id: movieId, kind: "movie", title: "Paddington 2", externalSource: "tmdb", externalId: "346648", createdBy: people[0]!.id });
 await db.insert(movieDetails).values({ itemId: movieId, year: 2017, runtime: 103, director: "Paul King", cachedAt: new Date().toISOString() });
@@ -75,6 +78,17 @@ for (const p of people) {
   }
 }
 
+const dishReviewId = newId();
+await db.insert(reviews).values({
+  id: dishReviewId, userId: people[0]!.id, itemId: dishId, experiencedOn: "2026-09-02",
+  enjoyment: 9, impact: 8, value: 7, aesthetic: 8, revisit: "regularly", recommendTo: "everyone", notes: null,
+});
+await db.insert(visits).values({
+  id: newId(), reviewId: dishReviewId, visitedOn: "2026-09-02",
+  enjoyment: 9, impact: 8, value: 7, aesthetic: 8, revisit: "regularly", recommendTo: "everyone",
+});
+count++;
+
 const movieReviewId = newId();
 await db.insert(reviews).values({
   id: movieReviewId, userId: people[0]!.id, itemId: movieId, experiencedOn: "2026-09-01",
@@ -87,5 +101,5 @@ await db.insert(visits).values({
 count++;
 
 const { token } = await createSession(db, alex.id);
-console.log(JSON.stringify({ users: people.length, items: itemIds.length, reviews: count, viewer: "Alex", token, sampleItemId: itemIds[0], sampleMovieId: movieId }, null, 2));
+console.log(JSON.stringify({ users: people.length, items: itemIds.length, reviews: count, viewer: "Alex", token, sampleItemId: itemIds[0], sampleMovieId: movieId, sampleDishId: dishId }, null, 2));
 sqlite.close();

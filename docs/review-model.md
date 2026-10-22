@@ -26,7 +26,16 @@ think now, `visits` is the history and trend, and `COUNT(*)` of visits is the "Ã
 search. Other people only ever see your current review, never the visit list.
 
 The wording stays neutral (`visitCount`, "times") in the API; the per-kind prompts carry the
-medium-specific language. Dishes will later hang off a visit.
+medium-specific language.
+
+## Dishes
+
+A dish is an item of kind `dish` whose `parent_id` is its restaurant, so it is reviewed with the
+same six questions, one review per user, and visits, with no extra tables. Anyone can add a
+dish to a restaurant; names are unique per restaurant ignoring case, so adding one that exists
+returns the existing dish. Dishes are not searchable or listed on their own: they show on the
+restaurant page, and a dish review in the feed carries its restaurant. Deleting a restaurant
+deletes its dishes. Dishes have their own prompts in `src/review-model.ts`.
 
 **Scale:** 1 is the worst of all time, 5 is average, 10 is the best of all time, relative
 to everything of that kind you have ever experienced. Most entries should land between

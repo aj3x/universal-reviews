@@ -155,6 +155,10 @@ fn review_json(r: &Row, with_item: bool) -> rusqlite::Result<Value> {
             "id": item_id,
             "kind": r.get::<_, String>("item_kind")?,
             "title": r.get::<_, String>("item_title")?,
+            "restaurant": match r.get::<_, Option<String>>("parent_id")? {
+                Some(id) => json!({ "id": id, "title": r.get::<_, String>("parent_title")? }),
+                None => Value::Null,
+            },
         });
     }
     Ok(v)
@@ -229,8 +233,10 @@ async fn feed(
     with_db(&s, move |c| {
         let viewer = viewer_id(c, token)?;
         let sql = format!(
-            "SELECT {REVIEW_COLUMNS}, i.kind AS item_kind, i.title AS item_title
+            "SELECT {REVIEW_COLUMNS}, i.kind AS item_kind, i.title AS item_title,
+                    p.id AS parent_id, p.title AS parent_title
              FROM reviews r JOIN users u ON u.id = r.user_id JOIN items i ON i.id = r.item_id
+                  LEFT JOIN items p ON p.id = i.parent_id
              WHERE (r.user_id = ?1 OR r.user_id IN (
                SELECT followee_id FROM follows WHERE follower_id = ?1 AND status = 'accepted'))
              AND ?2 = ?2 AND (?3 IS NULL OR r.id < ?3)
@@ -249,9 +255,10 @@ async fn item(State(s): State<Arc<AppState>>, Path(id): Path<String>, h: HeaderM
             .query_row(
                 "SELECT i.id, i.kind, i.title, i.external_source, i.external_id,
                         d.address, d.lat, d.lng, d.cuisine, d.price_level,
-                        m.year, m.runtime, m.director
+                        m.year, m.runtime, m.director, p.id AS parent_id, p.title AS parent_title
                  FROM items i LEFT JOIN restaurant_details d ON d.item_id = i.id
                               LEFT JOIN movie_details m ON m.item_id = i.id
+                              LEFT JOIN items p ON p.id = i.parent_id
                  WHERE i.id = ?1",
                 params![id],
                 |r| {
@@ -279,6 +286,10 @@ async fn item(State(s): State<Arc<AppState>>, Path(id): Path<String>, h: HeaderM
                         "title": r.get::<_, String>("title")?,
                         "externalSource": r.get::<_, Option<String>>("external_source")?,
                         "externalId": r.get::<_, Option<String>>("external_id")?,
+                        "restaurant": match r.get::<_, Option<String>>("parent_id")? {
+                            Some(id) => json!({ "id": id, "title": r.get::<_, String>("parent_title")? }),
+                            None => Value::Null,
+                        },
                         "details": details,
                     }))
                 },

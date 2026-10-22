@@ -9,7 +9,7 @@ import { newId } from "../lib/ids.ts";
 import { pageQuery, visitDate } from "../lib/validation.ts";
 import { feed, getReview, pageLimit } from "../lib/queries.ts";
 import {
-  ENABLED_KINDS, ITEM_KINDS, PROMPTS, RECOMMEND_TO, REVISIT, SCALE_HELP, SCORE_FIELDS, SCORE_MAX, SCORE_MIN,
+  ENABLED_KINDS, ITEM_KINDS, PROMPTS, RECOMMEND_TO, REVISIT, SCALE_HELP, SCORE_FIELDS, SCORE_MAX, SCORE_MIN, TOP_LEVEL_KINDS,
   type ItemKind,
 } from "../review-model.ts";
 
@@ -109,6 +109,7 @@ export const reviewModelRoutes = new Hono<AppEnv>().get("/", zValidator("query",
     revisit: REVISIT,
     recommendTo: RECOMMEND_TO,
     enabledKinds: ENABLED_KINDS,
+    topLevelKinds: TOP_LEVEL_KINDS,
     prompts: Object.fromEntries(kinds.map((k) => [k, PROMPTS[k]])),
   });
 });

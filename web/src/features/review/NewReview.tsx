@@ -37,7 +37,7 @@ export function NewReview({ model }: { model: ReviewModel }) {
 }
 
 function Pick({ model, onPick }: { model: ReviewModel; onPick: (i: ItemRef) => void }) {
-  const kinds = model.enabledKinds;
+  const kinds = model.topLevelKinds; // dishes are added from their restaurant's page
   const [kind, setKind] = useState<Kind>(kinds[0] ?? "restaurant");
   const [q, setQ] = useState("");
   const [found, setFound] = useState<ItemRow[]>([]);

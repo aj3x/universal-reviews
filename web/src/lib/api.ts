@@ -63,6 +63,7 @@ export type Page = Ok<typeof client.feed.$get>;
 export type Review = Page["data"][number];
 export type ItemDetail = Ok<(typeof client.items)[":id"]["$get"]>;
 export type ItemRow = Ok<typeof client.items.$get>["data"][number];
+export type DishRow = Ok<(typeof client.items)[":id"]["dishes"]["$get"]>["data"][number];
 export type MyReview = Ok<(typeof client.items)[":id"]["my-review"]["$get"]>;
 export type MyReviewSummary = NonNullable<ItemRow["myReview"]>;
 export type PlaceSuggestion = Ok<typeof client.places.autocomplete.$get>["data"][number];

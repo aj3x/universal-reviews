@@ -1,5 +1,5 @@
 import { zValidator } from "@hono/zod-validator";
-import { and, desc, eq, isNotNull, like, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, like, ne, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "../context.ts";
@@ -7,8 +7,8 @@ import { items, movieDetails, restaurantDetails, reviews, visits } from "../db/s
 import { latest, today } from "../lib/dates.ts";
 import { newId } from "../lib/ids.ts";
 import { pageQuery, visitDate } from "../lib/validation.ts";
-import { getItem, getMyReview, listItemReviews, overallOf, pageLimit } from "../lib/queries.ts";
-import { ENABLED_KINDS, ITEM_KINDS } from "../review-model.ts";
+import { getItem, getMyReview, listDishes, listItemReviews, overallOf, pageLimit } from "../lib/queries.ts";
+import { ITEM_KINDS, TOP_LEVEL_KINDS } from "../review-model.ts";
 
 const restaurantDetailsInput = z.object({
   address: z.string().max(300).nullish(),
@@ -38,7 +38,7 @@ export const itemRoutes = new Hono<AppEnv>()
     const query = c.req.valid("query");
     const q = (query.q ?? "").trim().replace(/[%_]/g, "");
     const kind = query.kind;
-    const filters = [];
+    const filters = [ne(items.kind, "dish")]; // dishes are found under their restaurant, not in search
     if (q) filters.push(like(items.title, `%${q}%`));
     if (kind && (ITEM_KINDS as readonly string[]).includes(kind)) filters.push(eq(items.kind, kind as (typeof ITEM_KINDS)[number]));
     const mine = and(eq(reviews.itemId, items.id), eq(reviews.userId, c.var.user.id));
@@ -70,7 +70,7 @@ export const itemRoutes = new Hono<AppEnv>()
   /** Manual entry (no Google match, or a kind without an external catalogue yet). */
   .post("/", zValidator("json", createItemInput), async (c) => {
     const input = c.req.valid("json");
-    if (!ENABLED_KINDS.includes(input.kind)) return c.json({ error: "kind_not_enabled", kind: input.kind }, 400);
+    if (!TOP_LEVEL_KINDS.includes(input.kind)) return c.json({ error: "kind_not_enabled", kind: input.kind }, 400);
     const { db } = c.var.deps;
     const schema = input.kind === "movie" ? movieDetailsInput : restaurantDetailsInput;
     const details = schema.safeParse(input.details ?? {});
@@ -137,6 +137,32 @@ export const itemRoutes = new Hono<AppEnv>()
   .get("/:id", async (c) => {
     const item = await getItem(c.var.deps.db, c.var.user.id, c.req.param("id"));
     return item ? c.json(item) : c.json({ error: "not_found" }, 404);
+  })
+
+  /** The dishes people have added under a restaurant. */
+  .get("/:id/dishes", async (c) => {
+    const { db } = c.var.deps;
+    const id = c.req.param("id");
+    const parent = await db.select({ kind: items.kind }).from(items).where(eq(items.id, id)).get();
+    if (parent?.kind !== "restaurant") return c.json({ error: "not_found" }, 404);
+    return c.json({ data: await listDishes(db, c.var.user.id, id) });
+  })
+
+  /** Add a dish to a restaurant, or return the one already there with that name (any case). */
+  .post("/:id/dishes", zValidator("json", z.object({ title: z.string().trim().min(1).max(200) })), async (c) => {
+    const { db } = c.var.deps;
+    const parentId = c.req.param("id");
+    const { title } = c.req.valid("json");
+    const parent = await db.select({ kind: items.kind }).from(items).where(eq(items.id, parentId)).get();
+    if (parent?.kind !== "restaurant") return c.json({ error: "not_found" }, 404);
+    const id = newId();
+    // The unique index on (parent, lower(title)) settles two people adding the same dish at once.
+    const inserted = await db.insert(items).values({ id, kind: "dish", title, parentId, createdBy: c.var.user.id })
+      .onConflictDoNothing().returning({ id: items.id });
+    if (inserted.length) return c.json((await getItem(db, c.var.user.id, id))!, 201);
+    const existing = await db.select({ id: items.id }).from(items)
+      .where(and(eq(items.parentId, parentId), sql`lower(${items.title}) = lower(${title})`)).get();
+    return c.json((await getItem(db, c.var.user.id, existing!.id))!);
   })
 
   /** Your own review of this item with its visit history. */

@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  type AnySQLiteColumn,
   check,
   index,
   integer,
@@ -56,7 +57,8 @@ export const follows = sqliteTable(
 // ── Things you review ─────────────────────────────────────────────────────
 // One `items` row per reviewable thing, whatever its kind. Kind-specific
 // fields live in a 1:1 details table (restaurant_details, movie_details;
-// book_details when that kind is switched on).
+// book_details when that kind is switched on). A dish has no details table: it is
+// a title under a restaurant (parent_id).
 
 export const items = sqliteTable(
   "items",
@@ -67,13 +69,18 @@ export const items = sqliteTable(
     /** Where the record came from: google_places, tmdb; openlibrary later. */
     externalSource: text("external_source"),
     externalId: text("external_id"),
+    /** A dish points at its restaurant; every other kind has no parent. */
+    parentId: text("parent_id").references((): AnySQLiteColumn => items.id, { onDelete: "cascade" }),
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: text("created_at").notNull().default(now),
   },
   (t) => [
     uniqueIndex("items_external_idx").on(t.externalSource, t.externalId),
     index("items_kind_title_idx").on(t.kind, t.title),
+    // One dish per name per restaurant, ignoring case. NULL parents never collide.
+    uniqueIndex("items_parent_title_idx").on(t.parentId, sql`lower(${t.title})`),
     check("items_kind", sql`${t.kind} IN (${inList(ITEM_KINDS)})`),
+    check("items_parent", sql`(${t.kind} = 'dish') = (${t.parentId} IS NOT NULL)`),
   ],
 );
 

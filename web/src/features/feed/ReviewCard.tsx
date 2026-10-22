@@ -6,7 +6,8 @@ export function ReviewCard({ r, showItem = true }: { r: Review; showItem?: boole
   return (
     <article className="card">
       <header>
-        {showItem && r.item && <h2><a href={`#/item/${r.item.id}`}>{r.item.title}</a> <span className="tag">{r.item.kind}</span></h2>}
+        {showItem && r.item && <h2><a href={`#/item/${r.item.id}`}>{r.item.title}</a> <span className="tag">{r.item.kind}</span>
+          {r.item.restaurant && <small className="muted"> at <a href={`#/item/${r.item.restaurant.id}`}>{r.item.restaurant.title}</a></small>}</h2>}
         <p className="muted">{r.author.displayName} · {new Date(r.createdAt).toLocaleDateString()}</p>
       </header>
       <dl className="scores">

@@ -10,6 +10,7 @@ const RUST = process.env.RUST_URL ?? "http://localhost:8081";
 const TOKEN = process.env.TOKEN;
 const ITEM = process.env.ITEM_ID;
 const MOVIE = process.env.MOVIE_ID;
+const DISH = process.env.DISH_ID;
 const RUNS = Number(process.env.RUNS ?? 300);
 if (!TOKEN || !ITEM) throw new Error("Set TOKEN and ITEM_ID (npm run seed prints both)");
 
@@ -23,6 +24,7 @@ const feed1 = await get(NODE, "/api/v1/feed?limit=3");
 const paths = [
   `/api/v1/items/${ITEM}`,
   `/api/v1/items/${MOVIE}`,
+  `/api/v1/items/${DISH}`,
   `/api/v1/items/${ITEM}/reviews`,
   `/api/v1/items/${ITEM}/reviews?limit=2`,
   "/api/v1/feed",
