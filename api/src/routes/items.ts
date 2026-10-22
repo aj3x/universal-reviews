@@ -139,6 +139,23 @@ export const itemRoutes = new Hono<AppEnv>()
     return item ? c.json(item) : c.json({ error: "not_found" }, 404);
   })
 
+  /** Rename a dish. Other kinds take their title from a catalogue, so only dishes can be renamed. */
+  .patch("/:id", zValidator("json", z.object({ title: z.string().trim().min(1).max(200) })), async (c) => {
+    const { db } = c.var.deps;
+    const id = c.req.param("id");
+    const { title } = c.req.valid("json");
+    const dish = await db.select({ kind: items.kind }).from(items).where(eq(items.id, id)).get();
+    if (dish?.kind !== "dish") return c.json({ error: "not_found" }, 404);
+    try {
+      await db.update(items).set({ title }).where(eq(items.id, id));
+    } catch (err) {
+      // The unique index on (parent, lower(title)) says another dish here already has this name.
+      if (String((err as Error).cause ?? err).includes("UNIQUE")) return c.json({ error: "title_taken" }, 409);
+      throw err;
+    }
+    return c.json((await getItem(db, c.var.user.id, id))!);
+  })
+
   /** The dishes people have added under a restaurant. */
   .get("/:id/dishes", async (c) => {
     const { db } = c.var.deps;

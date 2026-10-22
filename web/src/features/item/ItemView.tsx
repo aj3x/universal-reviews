@@ -10,7 +10,7 @@ export function ItemView({ id }: { id: string }) {
   if (item === null) return <p role="alert">Not found.</p>;
   return (
     <>
-      <h1>{item.title} <span className="tag">{item.kind}</span></h1>
+      {item.kind === "dish" ? <DishTitle item={item} onRenamed={setItem} /> : <h1>{item.title} <span className="tag">{item.kind}</span></h1>}
       {item.restaurant && <p className="muted">at <a href={`#/item/${item.restaurant.id}`}>{item.restaurant.title}</a></p>}
       {item.details && "address" in item.details && item.details.address && <p className="muted">{item.details.address}</p>}
       {item.details && "year" in item.details && (
@@ -31,6 +31,50 @@ export function ItemView({ id }: { id: string }) {
         showItem={false}
       />
     </>
+  );
+}
+
+/** A dish's heading, with a form to rename it in place. */
+function DishTitle({ item, onRenamed }: { item: ItemDetail; onRenamed: (item: ItemDetail) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(item.title);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    const name = title.trim();
+    if (!name) return;
+    if (name === item.title) return setEditing(false);
+    setBusy(true);
+    setError(undefined);
+    try {
+      onRenamed(await call(client.items[":id"].$patch({ param: { id: item.id }, json: { title: name } })));
+      setEditing(false);
+    } catch (err) {
+      setError(err instanceof ApiError && err.code === "title_taken" ? "This restaurant already has a dish with that name." : "Couldn't rename it. Try again.");
+    }
+    setBusy(false);
+  }
+
+  if (!editing) {
+    return (
+      <h1>
+        {item.title} <span className="tag">{item.kind}</span>{" "}
+        <button type="button" onClick={() => { setTitle(item.title); setError(undefined); setEditing(true); }}>Rename</button>
+      </h1>
+    );
+  }
+  return (
+    <form onSubmit={save}>
+      <label>
+        Dish name
+        <input value={title} maxLength={200} autoFocus onChange={(e) => setTitle(e.target.value)} />
+      </label>
+      <button className="primary" disabled={busy || !title.trim()}>Save</button>
+      <button type="button" onClick={() => setEditing(false)}>Cancel</button>
+      {error && <p role="alert">{error}</p>}
+    </form>
   );
 }
 

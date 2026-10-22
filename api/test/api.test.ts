@@ -151,6 +151,19 @@ describe("dishes", () => {
     expect(again.body.id).toBe(first.body.id);
   });
 
+  it("renames a dish, refusing a name another dish there already has and non-dish items", async () => {
+    const { user } = setup();
+    const me = await user("alex");
+    const rid = await restaurant(me);
+    const dish = (await me.json("POST", `/items/${rid}/dishes`, { title: "Ramen" })).body.id;
+    await me.json("POST", `/items/${rid}/dishes`, { title: "Gyoza" });
+    const renamed = await (await user("sam")).json("PATCH", `/items/${dish}`, { title: " Tonkotsu Ramen " });
+    expect(renamed.status).toBe(200);
+    expect(renamed.body).toMatchObject({ id: dish, title: "Tonkotsu Ramen" });
+    expect((await me.json("PATCH", `/items/${dish}`, { title: "gyoza" })).status).toBe(409);
+    expect((await me.json("PATCH", `/items/${rid}`, { title: "Elsewhere" })).status).toBe(404);
+  });
+
   it("only hangs dishes off restaurants and never creates them as standalone items", async () => {
     const { user } = setup();
     const me = await user("alex");

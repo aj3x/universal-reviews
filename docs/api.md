@@ -42,6 +42,7 @@ cookie (or `Authorization: Bearer <token>` for scripts). Lists are paginated wit
 | GET | `/items?q=&kind=&reviewedByMe=1` | Title search (dishes excluded); `reviewedByMe=1` limits to items you have reviewed. Rows carry `externalSource`/`externalId`, plus `address` (restaurants) or `year` (movies), and `myReview` (`{ id, overall, revisit, recommendTo, visitCount }` or `null`) |
 | GET | `/items/:id/dishes` | Dishes under a restaurant, A to Z: `{ id, title, reviewCount, overall, myOverall }`. 404 if the item isn't a restaurant |
 | POST | `/items/:id/dishes` | `{ title }`; reuses the restaurant's dish with that name, ignoring case (200), else creates it (201). Returns the dish item, with `restaurant: { id, title }` |
+| PATCH | `/items/:id` | Rename a dish: `{ title }`. 404 if the item isn't a dish, 409 `title_taken` if another dish at that restaurant has the name (ignoring case) |
 | GET | `/items/:id/my-review` | Your review of the item with its visit history (newest first). 404 if you haven't reviewed it |
 | POST | `/items/:id/visits` | "Went again, nothing changed": logs a visit that snapshots your current review. Body `{ visitedOn? }` (defaults to today) |
 | GET | `/items/:id` **R** | `details` is restaurant `{ address, lat, lng, cuisine, priceLevel }`, movie `{ year, runtime, director }`, or null. Plus stats: averages per score, revisit and recommend counts |
