@@ -16,12 +16,12 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@hono/node-server": "^2.1.5",
+    "@hono/node-server": "^2.1.6",
     "@hono/zod-validator": "^0.9.1",
     "better-sqlite3": "^13.0.3",
     "drizzle-orm": "^0.45.4",
-    "hono": "^4.13.13",
-    "openid-client": "^6.8.8",
+    "hono": "^4.13.17",
+    "openid-client": "^6.8.9",
     "ulid": "^3.0.2",
     "zod": "^4.6.7"
   },
@@ -30,6 +30,6 @@
     "@types/node": "^24.4.1",
     "drizzle-kit": "^0.31.11",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.5"
+    "vitest": "^5.1.0"
   }
 }
